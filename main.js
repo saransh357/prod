@@ -373,3 +373,74 @@ function boot() {
 
 boot();
 typewriter();
+
+// ── DEBUG helpers ─────────────────────────────────────────────────────────────
+document.getElementById('btn-test-cam') && document.getElementById('btn-test-cam').addEventListener('click', function() {
+    // Test if video element can show anything at all
+    var vid = document.getElementById('webcam-feed');
+    var dbg = document.getElementById('debug-msg');
+    dbg.textContent = 'requesting local cam...';
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    .then(function(s) {
+        vid.srcObject = s;
+        vid.muted = true;
+        vid.play().then(function() {
+            dbg.textContent = 'LOCAL CAM OK — video element works!';
+            dbg.style.color = '#00ff41';
+            var noSig = document.getElementById('overlay-nosignal');
+            if (noSig) noSig.classList.add('hidden');
+            log('video element confirmed working', 'ok');
+        }).catch(function(e) {
+            dbg.textContent = 'play() failed: ' + e.message;
+            dbg.style.color = '#ff2222';
+            log('play failed: ' + e.message, 'err');
+        });
+    }).catch(function(e) {
+        dbg.textContent = 'cam denied: ' + e.message;
+        dbg.style.color = '#ff2222';
+        log('test cam denied: ' + e.message, 'err');
+    });
+});
+
+document.getElementById('btn-force-render') && document.getElementById('btn-force-render').addEventListener('click', function() {
+    var vid = document.getElementById('webcam-feed');
+    var dbg = document.getElementById('debug-msg');
+    var noSig    = document.getElementById('overlay-nosignal');
+    var playOver = document.getElementById('overlay-play');
+    
+    dbg.textContent = 'currentStream=' + (currentStream ? 'YES tracks:'+currentStream.getTracks().length : 'NULL');
+    dbg.style.color = currentStream ? '#00ff41' : '#ff2222';
+    log('force render: stream=' + (currentStream ? 'YES' : 'NULL'), currentStream ? 'ok' : 'err');
+
+    if (!currentStream) {
+        log('no stream yet — connect first', 'err');
+        return;
+    }
+
+    // Brute force: recreate video element
+    var parent = vid.parentNode;
+    var newVid = document.createElement('video');
+    newVid.id = 'webcam-feed';
+    newVid.autoplay = true;
+    newVid.muted = true;
+    newVid.playsInline = true;
+    newVid.setAttribute('playsinline', '');
+    newVid.setAttribute('webkit-playsinline', '');
+    newVid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1;';
+    newVid.srcObject = currentStream;
+    parent.insertBefore(newVid, vid);
+    parent.removeChild(vid);
+
+    newVid.play().then(function() {
+        dbg.textContent = 'FORCE RENDER OK!';
+        dbg.style.color = '#00ff41';
+        if (noSig)    noSig.classList.add('hidden');
+        if (playOver) playOver.classList.add('hidden');
+        setStatus(true, 'WATCHING');
+        log('force render SUCCESS', 'ok');
+    }).catch(function(e) {
+        dbg.textContent = 'force render failed: ' + e.message;
+        dbg.style.color = '#ff2222';
+        log('force render failed: ' + e.message, 'err');
+    });
+});
