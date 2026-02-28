@@ -31,6 +31,51 @@ var PEER_CONFIG = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function forcePlayVideo(stream) {
+    var video = document.getElementById('webcam-feed');
+    var overlay = document.getElementById('no-signal');
+    if (!video) { addLog('ERROR: video element not found', 'err'); return; }
+
+    // Detach first to reset state
+    video.srcObject = null;
+    video.load();
+
+    setTimeout(function() {
+        video.srcObject = stream;
+        video.muted = true;        // must be muted for autoplay to work
+        video.playsInline = true;
+        video.autoplay = true;
+
+        var playPromise = video.play();
+        if (playPromise !== undefined) {
+            playPromise.then(function() {
+                addLog('video playing OK', 'ok');
+                if (overlay) overlay.className = 'no-signal hidden';
+            }).catch(function(err) {
+                addLog('autoplay blocked: ' + err.message, 'err');
+                addLog('tap the video area to start playback', '');
+                // Add a one-time click handler so user tap starts it
+                video.addEventListener('click', function handler() {
+                    video.play().catch(function(){});
+                    video.removeEventListener('click', handler);
+                });
+                // Show a tap-to-play overlay
+                if (overlay) {
+                    overlay.className = 'no-signal';
+                    overlay.querySelector('.ns-glitch').textContent = 'TAP TO PLAY';
+                    overlay.querySelector('.ns-sub').textContent = 'STREAM READY — TAP VIDEO TO START';
+                    overlay.style.cursor = 'pointer';
+                    overlay.addEventListener('click', function h() {
+                        video.play().catch(function(){});
+                        overlay.className = 'no-signal hidden';
+                        overlay.removeEventListener('click', h);
+                    });
+                }
+            });
+        }
+    }, 100);
+}
+
 function addLog(msg, type) {
     var terminal = document.getElementById('log');
     if (!terminal) return;
@@ -231,20 +276,15 @@ function _doConnect(password) {
             }, 20000);
 
             call.on('stream', function(remoteStream) {
-                if (gotStream) return; // prevent double-fire
+                if (gotStream) return;
                 gotStream = true;
                 clearTimeout(streamTimer);
                 retryCount = 0;
-                var video = document.getElementById('webcam-feed');
-                if (video) {
-                    video.srcObject = remoteStream;
-                    video.play().catch(function(){});
-                }
                 currentStream = remoteStream;
+                forcePlayVideo(remoteStream);
                 setStatus(true, 'WATCHING');
                 addLog('stream received — LIVE', 'ok');
             });
-
             // Also watch peerConnection directly for track events (Safari fallback)
             if (call.peerConnection) {
                 call.peerConnection.addEventListener('track', function(e) {
@@ -253,12 +293,8 @@ function _doConnect(password) {
                     gotStream = true;
                     clearTimeout(streamTimer);
                     retryCount = 0;
-                    var video = document.getElementById('webcam-feed');
-                    if (video) {
-                        video.srcObject = e.streams[0];
-                        video.play().catch(function(){});
-                    }
                     currentStream = e.streams[0];
+                    forcePlayVideo(e.streams[0]);
                     setStatus(true, 'WATCHING');
                     addLog('stream received (track) — LIVE', 'ok');
                 });
@@ -359,6 +395,22 @@ function boot() {
     lines.forEach(function(l, i) {
         setTimeout(function(){ addLog(l.msg, l.type); }, i * 200);
     });
+}
+
+// ── Force play (called when autoplay is blocked) ─────────────────────────────
+function forcePlay() {
+    var video = document.getElementById('webcam-feed');
+    var overlay = document.getElementById('no-signal');
+    if (video && currentStream) {
+        video.srcObject = currentStream;
+        video.muted = true; // muted always works
+        video.play().then(function() {
+            if (overlay) overlay.className = 'no-signal hidden';
+            addLog('playback started.', 'ok');
+        }).catch(function(e) {
+            addLog('play failed: ' + e.message, 'err');
+        });
+    }
 }
 
 // ── Wire buttons — runs immediately, no DOMContentLoaded needed ───────────────
