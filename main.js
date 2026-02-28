@@ -1,93 +1,135 @@
-const video = document.getElementById('webcam-feed');
-const btnBack = document.getElementById('btn-back');
-const btnFront = document.getElementById('btn-front');
-const btnFS = document.getElementById('btn-fullscreen');
-
-function capture(facingMode) {
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode }
-    })
-    .then(stream => {
-        video.srcObject = stream;
-        document.querySelector('.status-dot').style.background = '#22c55e';
-        document.querySelector('.status-dot').style.boxShadow = '0 0 10px #22c55e';
-    })
-    .catch(err => {
-        console.error("Camera Access Denied:", err);
-        alert("Please allow camera permissions to use this utility.");
-    });
-}
-
-function enterFullScreen() {
-    if (video.requestFullscreen) video.requestFullscreen();
-    else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
-    else if (video.webkitEnterFullScreen) video.webkitEnterFullScreen();
-}
-let peer = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let peer          = null;
 let currentStream = null;
+let activeCall    = null;
+let mode          = 'broadcast';
 
-const video = document.getElementById('webcam-feed');
-const passwordInput = document.getElementById('stream-pass');
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const video    = document.getElementById('webcam-feed');
+const logEl    = document.getElementById('log');
+const dotEl    = document.getElementById('status-dot');
+const statusEl = document.getElementById('status-text');
+const overlay  = document.getElementById('video-overlay');
 
-// 1. Function to Start Broadcasting (Phone Side)
-async function startStreaming(facingMode) {
-    const password = passwordInput.value;
-    if (!password) return alert("Please set a password first!");
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, type = 'entry') {
+    const t = new Date().toLocaleTimeString();
+    logEl.innerHTML = `<span class="${type}">[${t}] ${msg}</span>`;
+}
+
+// ── Mode switching ────────────────────────────────────────────────────────────
+function setMode(m) {
+    mode = m;
+    document.getElementById('tab-broadcast').classList.toggle('active', m === 'broadcast');
+    document.getElementById('tab-watch').classList.toggle('active', m === 'watch');
+    document.getElementById('panel-broadcast').style.display = m === 'broadcast' ? 'flex' : 'none';
+    document.getElementById('panel-watch').style.display     = m === 'watch'     ? 'flex' : 'none';
+    log('Mode set to: ' + m);
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(live, label) {
+    dotEl.className      = live ? 'dot live' : 'dot';
+    statusEl.textContent = live ? label : 'OFFLINE';
+    overlay.className    = live ? 'video-overlay hidden' : 'video-overlay';
+}
+
+// ── Stop / cleanup ────────────────────────────────────────────────────────────
+function stopStream() {
+    if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+    if (activeCall)    { activeCall.close();  activeCall = null; }
+    if (peer)          { peer.destroy();      peer = null; }
+    video.srcObject = null;
+    setStatus(false, 'OFFLINE');
+    log('Stopped.', 'err');
+}
+
+// ── Broadcast (Phone side) ────────────────────────────────────────────────────
+async function startBroadcast(facingMode) {
+    const password = document.getElementById('stream-pass').value.trim();
+    if (!password) { log('Enter a password first!', 'err'); return; }
+
+    stopStream();
+    log('Requesting camera access...');
 
     try {
         currentStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: facingMode },
+            video: { facingMode },
             audio: true
         });
-        
-        video.srcObject = currentStream;
-        
-        // Initialize Peer with the password as the ID
-        peer = new Peer(password); 
-
-        peer.on('open', (id) => {
-            alert("Streaming started! PC can now join using this password.");
-            updateStatus(true);
-        });
-
-        // When the PC calls the phone, send the video stream
-        peer.on('call', (call) => {
-            call.answer(currentStream);
-        });
-
-    } catch (err) {
-        console.error("Error:", err);
-        alert("Camera access failed.");
+    } catch (e) {
+        log('Camera denied: ' + e.message, 'err');
+        return;
     }
-}
 
-// 2. Function to Watch (PC Side)
-function watchStream() {
-    const password = passwordInput.value;
-    if (!password) return alert("Enter the broadcaster's password!");
+    video.srcObject = currentStream;
+    setStatus(true, 'BROADCASTING');
+    log('Camera active. Connecting to signalling server...');
 
-    peer = new Peer(); // PC gets a random ID
+    peer = new Peer(password, { debug: 0 });
 
-    peer.on('open', () => {
-        const call = peer.call(password, null); // Call the phone using the password
-        
-        call.on('stream', (remoteStream) => {
-            video.srcObject = remoteStream;
-            updateStatus(true);
-        });
+    peer.on('open', id => {
+        log('Ready! Waiting for viewer on key: "' + id + '"', 'success');
+    });
+
+    peer.on('call', call => {
+        activeCall = call;
+        call.answer(currentStream);
+        setStatus(true, 'LIVE');
+        log('Viewer connected — streaming live!', 'success');
+    });
+
+    peer.on('error', err => {
+        if (err.type === 'unavailable-id') {
+            log('Password already in use — try a different one.', 'err');
+        } else {
+            log('Peer error: ' + err.message, 'err');
+        }
     });
 }
 
-function updateStatus(active) {
-    const dot = document.querySelector('.status-dot');
-    dot.style.background = active ? '#22c55e' : '#ef4444';
-    dot.style.boxShadow = active ? '0 0 10px #22c55e' : '0 0 10px #ef4444';
+// ── Watch (PC side) ───────────────────────────────────────────────────────────
+function startWatching() {
+    const password = document.getElementById('stream-pass').value.trim();
+    if (!password) { log('Enter the broadcaster password!', 'err'); return; }
+
+    stopStream();
+    log('Connecting to broadcaster...');
+
+    peer = new Peer({ debug: 0 });
+
+    peer.on('open', () => {
+        // Pass a dummy empty stream — PeerJS requires a MediaStream on the caller side
+        const dummyStream = new MediaStream();
+        const call = peer.call(password, dummyStream);
+
+        if (!call) { log('Could not reach broadcaster. Check password.', 'err'); return; }
+        activeCall = call;
+
+        call.on('stream', remote => {
+            video.srcObject = remote;
+            currentStream   = remote;
+            setStatus(true, 'WATCHING');
+            log('Stream received! Watching live feed.', 'success');
+        });
+
+        call.on('close', () => {
+            setStatus(false, 'OFFLINE');
+            log('Broadcaster disconnected.', 'err');
+        });
+
+        call.on('error', e => log('Call error: ' + e.message, 'err'));
+    });
+
+    peer.on('error', e => log('Connection failed: ' + e.message, 'err'));
 }
 
-// Event Listeners
-document.getElementById('btn-back').addEventListener('click', () => startStreaming('environment'));
-document.getElementById('btn-front').addEventListener('click', () => startStreaming('user'));
-document.getElementById('btn-watch').addEventListener('click', watchStream);
-btnBack.addEventListener('click', () => capture('environment'));
-btnFront.addEventListener('click', () => capture('user'));
-btnFS.addEventListener('click', enterFullScreen);
+// ── Fullscreen ────────────────────────────────────────────────────────────────
+function toggleFullscreen() {
+    const el = document.querySelector('.video-wrap');
+    if (!document.fullscreenElement) {
+        (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } else {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+}
