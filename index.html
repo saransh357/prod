@@ -4,73 +4,326 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RVU Major Project | Phone-as-Webcam</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg: #060a10;
+            --surface: rgba(255,255,255,0.03);
+            --border: rgba(255,255,255,0.08);
+            --blue: #38bdf8;
+            --purple: #a78bfa;
+            --green: #4ade80;
+            --red: #f87171;
+            --text: #f1f5f9;
+            --dim: #64748b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .container { width: 100%; max-width: 860px; position: relative; z-index: 1; }
+        .header { margin-bottom: 28px; animation: fadeUp 0.6s ease both; }
+        .badge { font-size: 0.65rem; letter-spacing: 4px; color: var(--blue); font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+        .title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.8rem, 5vw, 2.8rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--blue) 0%, var(--purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
+        }
+        .meta { margin-top: 12px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .meta-chip { font-size: 0.72rem; padding: 4px 12px; border: 1px solid var(--border); border-radius: 99px; color: var(--dim); }
+        .meta-chip.highlight { border-color: var(--blue); color: var(--blue); }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 16px;
+            animation: fadeUp 0.6s ease both;
+        }
+        .card-label { font-size: 0.65rem; letter-spacing: 3px; color: var(--dim); text-transform: uppercase; margin-bottom: 16px; }
+        .mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+        .tab {
+            flex: 1; padding: 10px; border-radius: 10px;
+            border: 1px solid var(--border); background: transparent;
+            color: var(--dim); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+        }
+        .tab.active { background: rgba(56,189,248,0.1); border-color: var(--blue); color: var(--blue); }
+        .input-row { display: flex; gap: 10px; margin-bottom: 14px; }
+        .input-field {
+            flex: 1; padding: 11px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            border-radius: 10px; color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; outline: none; transition: border-color 0.2s;
+        }
+        .input-field:focus { border-color: var(--blue); }
+        .input-field::placeholder { color: var(--dim); }
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn {
+            padding: 11px 20px; border-radius: 10px; border: none;
+            cursor: pointer; font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem; font-weight: 600; transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
+        .btn:active { transform: translateY(0); }
+        .btn-blue   { background: var(--blue); color: #000; }
+        .btn-purple { background: var(--purple); color: #000; }
+        .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-ghost:hover { border-color: var(--blue); color: var(--blue); }
+        .log {
+            margin-top: 14px; padding: 12px 16px;
+            background: rgba(0,0,0,0.4); border: 1px solid var(--border);
+            border-radius: 10px; font-size: 0.72rem; color: var(--dim); min-height: 40px; line-height: 1.6;
+        }
+        .log .entry   { color: var(--blue); }
+        .log .err     { color: var(--red); }
+        .log .success { color: var(--green); }
+        .video-wrap {
+            position: relative; border-radius: 14px; overflow: hidden;
+            background: #000; aspect-ratio: 16/9; border: 1px solid var(--border);
+        }
+        #webcam-feed { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .video-overlay {
+            position: absolute; inset: 0; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.6); color: var(--dim);
+            font-size: 0.8rem; letter-spacing: 2px;
+            pointer-events: none; transition: opacity 0.4s;
+        }
+        .video-overlay.hidden { opacity: 0; }
+        .status-bar {
+            position: absolute; top: 12px; left: 12px; right: 12px;
+            display: flex; align-items: center; justify-content: space-between;
+            pointer-events: none;
+        }
+        .status-pill {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            padding: 5px 12px; border-radius: 99px; font-size: 0.7rem;
+        }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1.5s infinite; }
+        .dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+        .instructions { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 20px; }
+        summary { cursor: pointer; font-size: 0.75rem; color: var(--dim); letter-spacing: 1px; list-style: none; display: flex; align-items: center; gap: 8px; }
+        summary::before { content: '▶'; font-size: 0.6rem; transition: transform 0.2s; }
+        details[open] summary::before { transform: rotate(90deg); }
+        .instruction-body { margin-top: 14px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 10px; font-size: 0.75rem; line-height: 2; color: var(--dim); counter-reset: step; }
+        .instruction-body li { list-style: none; counter-increment: step; padding-left: 4px; }
+        .instruction-body li::before { content: counter(step, decimal-leading-zero) '. '; color: var(--blue); }
+        .instruction-body strong { color: var(--text); }
+        .footer { text-align: center; font-size: 0.65rem; color: var(--dim); margin-top: 20px; letter-spacing: 2px; animation: fadeUp 0.6s 0.4s ease both; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 500px) { .btn-row { flex-direction: column; } .btn { justify-content: center; } }
+    </style>
 </head>
 <body>
+<div class="container">
 
-    <div class="glass-container">
-        <header class="project-header">
-            <div class="uni-badge">RV UNIVERSITY</div>
-            <h1 class="project-title">Phone-to-Webcam Utility</h1>
-            <p class="project-subtitle">Major Project | Computer Science</p>
-            
-            <div class="author-card">
-                <div class="author-info">
-                    <strong>Developer:</strong> Saransh Kumar
-                    <span>ID: 1rvu22bsc090</span>
+    <div class="header">
+        <div class="badge">RV University · Major Project</div>
+        <h1 class="title">Phone-to-Webcam<br>Stream Utility</h1>
+        <div class="meta">
+            <span class="meta-chip highlight">Saransh Kumar</span>
+            <span class="meta-chip">1RVU22BSC090</span>
+            <span class="meta-chip">Computer Science</span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-label">// Stream Control</div>
+        <div class="mode-tabs">
+            <button class="tab active" id="tab-broadcast" onclick="setMode('broadcast')">📡 Broadcast (Phone)</button>
+            <button class="tab" id="tab-watch" onclick="setMode('watch')">📺 Watch (PC)</button>
+        </div>
+        <div class="input-row">
+            <input type="password" id="stream-pass" class="input-field" placeholder="Enter stream password / room key">
+        </div>
+        <div id="panel-broadcast" class="btn-row">
+            <button class="btn btn-blue"   onclick="startBroadcast('environment')">📷 Back Camera</button>
+            <button class="btn btn-purple" onclick="startBroadcast('user')">🤳 Front Camera</button>
+            <button class="btn btn-ghost"  onclick="stopStream()">⏹ Stop</button>
+        </div>
+        <div id="panel-watch" class="btn-row" style="display:none;">
+            <button class="btn btn-blue" onclick="startWatching()">📺 Connect &amp; Watch</button>
+            <button class="btn btn-ghost" onclick="stopStream()">⏹ Disconnect</button>
+        </div>
+        <div class="log" id="log">Waiting for action...</div>
+    </div>
+
+    <div class="card">
+        <div class="card-label">// Live Feed</div>
+        <div class="video-wrap">
+            <video id="webcam-feed" autoplay muted playsinline></video>
+            <div class="video-overlay" id="video-overlay">NO SIGNAL</div>
+            <div class="status-bar">
+                <div class="status-pill">
+                    <div class="dot" id="status-dot"></div>
+                    <span id="status-text">OFFLINE</span>
                 </div>
+                <button class="btn btn-ghost" style="pointer-events:all; padding:4px 10px; font-size:0.7rem;" onclick="toggleFullscreen()">⛶ FS</button>
             </div>
-        </header>
-        <div class="control-panel">
-    <input type="password" id="stream-pass" placeholder="Enter Stream Password" class="btn btn-outline" style="text-align: center;">
-    
-    <button class="btn btn-primary" id="btn-back">📷 Stream Back</button>
-    <button class="btn btn-secondary" id="btn-front">🤳 Stream Front</button>
-    
-    <button class="btn btn-outline" id="btn-watch">📺 Watch Stream</button>
-</div>
-
-<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-<script src="main.js"></script>
-
-        <main class="viewport-section">
-            <div class="video-wrapper">
-                <video autoplay muted playsinline id="webcam-feed">
-                    Your browser does not support HTML video.
-                </video>
-                <div class="status-dot"></div>
-            </div>
-
-            <div class="control-panel">
-                <button class="btn btn-primary" id="btn-back">
-                    <span class="icon">📷</span> Capture Back
-                </button>
-                <button class="btn btn-secondary" id="btn-front">
-                    <span class="icon">🤳</span> Capture Front
-                </button>
-                <button class="btn btn-outline" id="btn-fullscreen">
-                    <span class="icon">⛶</span> Full Screen
-                </button>
-            </div>
-        </main>
-
-        <footer>
-            <details class="instructions">
+        </div>
+        <div class="instructions">
+            <details>
                 <summary>How to use this utility</summary>
-                <div class="instruction-content">
+                <div class="instruction-body">
                     <ol>
-                        <li>Connect phone to PC via USB cable.</li>
-                        <li>Open this page on your phone & click <strong>Capture Back</strong>.</li>
-                        <li>Enter <strong>Full Screen</strong> on the phone.</li>
-                        <li>In OBS Studio, add a "Video Capture Device" and select your phone.</li>
+                        <li>Open this page on your <strong>phone</strong> and your <strong>PC</strong> — both on the same WiFi or hotspot.</li>
+                        <li>Both devices enter the <strong>same password</strong>.</li>
+                        <li>Phone: select <strong>Broadcast</strong> tab → tap Back or Front camera → allow permissions.</li>
+                        <li>PC: select <strong>Watch</strong> tab → tap <strong>Connect &amp; Watch</strong>.</li>
+                        <li>The live stream will appear within a few seconds.</li>
+                        <li>For OBS: add a <strong>Browser Source</strong> pointing to this page on the PC.</li>
                     </ol>
                 </div>
             </details>
-            <p class="copyright">© 2024 Saransh Kumar • RV University</p>
-        </footer>
+        </div>
     </div>
 
-    <script src="main.js"></script>
+    <div class="footer">© 2024 SARANSH KUMAR · RV UNIVERSITY · ALL RIGHTS RESERVED</div>
+</div>
+
+<script>
+    let peer = null;
+    let currentStream = null;
+    let activeCall = null;
+    let mode = 'broadcast';
+
+    const video    = document.getElementById('webcam-feed');
+    const logEl    = document.getElementById('log');
+    const dotEl    = document.getElementById('status-dot');
+    const statusEl = document.getElementById('status-text');
+    const overlay  = document.getElementById('video-overlay');
+
+    function log(msg, type = 'entry') {
+        const t = new Date().toLocaleTimeString();
+        logEl.innerHTML = `<span class="${type}">[${t}] ${msg}</span>`;
+    }
+
+    function setMode(m) {
+        mode = m;
+        document.getElementById('tab-broadcast').classList.toggle('active', m === 'broadcast');
+        document.getElementById('tab-watch').classList.toggle('active', m === 'watch');
+        document.getElementById('panel-broadcast').style.display = m === 'broadcast' ? 'flex' : 'none';
+        document.getElementById('panel-watch').style.display     = m === 'watch'     ? 'flex' : 'none';
+        log('Mode: ' + m);
+    }
+
+    function setStatus(live, label) {
+        dotEl.className          = live ? 'dot live' : 'dot';
+        statusEl.textContent     = live ? label : 'OFFLINE';
+        overlay.className        = live ? 'video-overlay hidden' : 'video-overlay';
+    }
+
+    function stopStream() {
+        if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+        if (activeCall)    { activeCall.close();  activeCall = null; }
+        if (peer)          { peer.destroy();      peer = null; }
+        video.srcObject = null;
+        setStatus(false, 'OFFLINE');
+        log('Stopped.', 'err');
+    }
+
+    async function startBroadcast(facingMode) {
+        const password = document.getElementById('stream-pass').value.trim();
+        if (!password) { log('Enter a password first!', 'err'); return; }
+        stopStream();
+        log('Requesting camera...');
+        try {
+            currentStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: true });
+        } catch (e) {
+            log('Camera denied: ' + e.message, 'err'); return;
+        }
+        video.srcObject = currentStream;
+        setStatus(true, 'BROADCASTING');
+        log('Camera active. Connecting...');
+
+        peer = new Peer(password, { debug: 0 });
+
+        peer.on('open', id => {
+            log('Ready! Waiting for viewer on key: "' + id + '"', 'success');
+        });
+
+        peer.on('call', call => {
+            activeCall = call;
+            call.answer(currentStream);
+            setStatus(true, 'LIVE');
+            log('Viewer connected — streaming live!', 'success');
+        });
+
+        peer.on('error', err => {
+            if (err.type === 'unavailable-id') {
+                log('Password already taken — try another.', 'err');
+            } else {
+                log('Error: ' + err.message, 'err');
+            }
+        });
+    }
+
+    function startWatching() {
+        const password = document.getElementById('stream-pass').value.trim();
+        if (!password) { log('Enter the broadcaster password!', 'err'); return; }
+        stopStream();
+        log('Connecting to broadcaster...');
+
+        peer = new Peer({ debug: 0 });
+
+        peer.on('open', () => {
+            // We pass an empty MediaStream so PeerJS doesn't reject the call
+            const dummyStream = new MediaStream();
+            const call = peer.call(password, dummyStream);
+            if (!call) { log('Could not reach broadcaster. Check password.', 'err'); return; }
+            activeCall = call;
+
+            call.on('stream', remote => {
+                video.srcObject = remote;
+                currentStream   = remote;
+                setStatus(true, 'WATCHING');
+                log('Stream received!', 'success');
+            });
+
+            call.on('close', () => { setStatus(false, 'OFFLINE'); log('Broadcaster disconnected.', 'err'); });
+            call.on('error', e => log('Call error: ' + e.message, 'err'));
+        });
+
+        peer.on('error', e => log('Connection failed: ' + e.message, 'err'));
+    }
+
+    function toggleFullscreen() {
+        const el = document.querySelector('.video-wrap');
+        if (!document.fullscreenElement) {
+            (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+        } else {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        }
+    }
+</script>
 </body>
 </html>
