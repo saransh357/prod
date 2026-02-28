@@ -81,52 +81,72 @@ setInterval(function() {
 
 // ── Show video ────────────────────────────────────────────────────────────────
 function showVideo(stream) {
-    var vid      = document.getElementById('webcam-feed');
-    var noSig    = document.getElementById('overlay-nosignal');
-    var playOver = document.getElementById('overlay-play');
-
-    if (!vid) { log('video element missing!', 'err'); return; }
-
     currentStream = stream;
-    vid.srcObject  = stream;
-    vid.muted      = true;   // muted = always autoplays
 
-    log('attaching stream...', 'ok');
+    log('stream arrived!', 'ok');
     log('tracks: ' + stream.getTracks().map(function(t){ return t.kind+'('+t.readyState+')'; }).join(', '), 'ok');
 
-    vid.play()
-    .then(function() {
-        log('▶ playing!', 'ok');
-        if (noSig)    noSig.classList.add('hidden');
-        if (playOver) playOver.classList.add('hidden');
-        setStatus(true, 'WATCHING');
-    })
-    .catch(function(err) {
-        log('autoplay blocked: ' + err.message, 'err');
-        log('>>> click the green button <<<', 'ok');
-        if (noSig)    noSig.classList.add('hidden');
-        if (playOver) playOver.classList.remove('hidden');
-        setStatus(true, 'PAUSED');
-    });
+    // Always show the PLAY button — user click guarantees autoplay works
+    var noSig    = document.getElementById('overlay-nosignal');
+    var playOver = document.getElementById('overlay-play');
+    if (noSig)    noSig.style.display = 'none';
+    if (playOver) playOver.style.display = 'flex';
+
+    setStatus(true, 'WATCHING');
+    log('>>> click PLAY STREAM button <<<', 'ok');
 }
 
 // ── Manual play ───────────────────────────────────────────────────────────────
 function manualPlay() {
-    var vid      = document.getElementById('webcam-feed');
     var playOver = document.getElementById('overlay-play');
     var noSig    = document.getElementById('overlay-nosignal');
 
-    if (!vid || !currentStream) { log('no stream yet', 'err'); return; }
+    if (!currentStream) { log('no stream yet — connect first', 'err'); return; }
+
+    log('manual play clicked...', 'ok');
+
+    // Destroy old video element and create a brand new one
+    // This is the most reliable way to force Chrome to render a remote stream
+    var frame   = document.querySelector('.video-frame');
+    var oldVid  = document.getElementById('webcam-feed');
+    if (oldVid) frame.removeChild(oldVid);
+
+    var vid = document.createElement('video');
+    vid.id               = 'webcam-feed';
+    vid.autoplay         = true;
+    vid.muted            = true;
+    vid.playsInline      = true;
+    vid.setAttribute('playsinline', '');
+    vid.setAttribute('webkit-playsinline', '');
+    vid.style.position   = 'absolute';
+    vid.style.inset      = '0';
+    vid.style.width      = '100%';
+    vid.style.height     = '100%';
+    vid.style.objectFit  = 'cover';
+    vid.style.display    = 'block';
+    vid.style.zIndex     = '1';
+
+    // Insert before the overlays
+    var firstOverlay = frame.querySelector('.abs-fill');
+    frame.insertBefore(vid, firstOverlay);
+
+    // Set srcObject AFTER inserting into DOM
     vid.srcObject = currentStream;
-    vid.muted     = true;
+
     vid.play()
     .then(function() {
-        log('▶ manual play OK', 'ok');
-        if (playOver) playOver.classList.add('hidden');
-        if (noSig)    noSig.classList.add('hidden');
+        log('▶ PLAYING! stream is live', 'ok');
+        if (playOver) playOver.style.display = 'none';
+        if (noSig)    noSig.style.display = 'none';
         setStatus(true, 'WATCHING');
     })
-    .catch(function(e) { log('play err: ' + e.message, 'err'); });
+    .catch(function(e) {
+        log('play failed: ' + e.message, 'err');
+        // Last resort: open stream in a new tab
+        log('trying new tab fallback...', 'err');
+        var url = URL.createObjectURL(currentStream);
+        window.open(url, '_blank');
+    });
 }
 
 // ── Mode ──────────────────────────────────────────────────────────────────────
@@ -151,8 +171,8 @@ function stopStream() {
     if (vid) vid.srcObject = null;
     var noSig    = document.getElementById('overlay-nosignal');
     var playOver = document.getElementById('overlay-play');
-    if (noSig)    noSig.classList.remove('hidden');
-    if (playOver) playOver.classList.add('hidden');
+    if (noSig)    noSig.style.display = 'flex';
+    if (playOver) playOver.style.display = 'none';
     setStatus(false, 'OFFLINE');
     log('terminated.', 'err');
 }
@@ -434,8 +454,8 @@ document.getElementById('btn-force-render') && document.getElementById('btn-forc
     newVid.play().then(function() {
         dbg.textContent = 'FORCE RENDER OK!';
         dbg.style.color = '#00ff41';
-        if (noSig)    noSig.classList.add('hidden');
-        if (playOver) playOver.classList.add('hidden');
+        if (noSig)    noSig.style.display = 'none';
+        if (playOver) playOver.style.display = 'none';
         setStatus(true, 'WATCHING');
         log('force render SUCCESS', 'ok');
     }).catch(function(e) {
