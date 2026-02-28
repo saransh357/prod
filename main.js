@@ -361,3 +361,26 @@ function toggleFullscreen() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 bootLog();
 typewriter();
+
+
+// ── Mobile touch fix: re-bind all buttons via addEventListener ────────────────
+// iOS Safari can ignore onclick attributes on buttons inside flex containers
+document.addEventListener('DOMContentLoaded', () => {
+    const map = {
+        'tab-broadcast':  () => setMode('broadcast'),
+        'tab-watch':      () => setMode('watch'),
+        'btn-back-cam':   () => startBroadcast('environment'),
+        'btn-front-cam':  () => startBroadcast('user'),
+        'btn-stop-bcast': () => stopStream(),
+        'btn-connect':    () => startWatching(),
+        'btn-disconnect': () => stopStream(),
+        'btn-fullscreen': () => toggleFullscreen(),
+    };
+    Object.entries(map).forEach(([id, fn]) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', fn);
+            el.addEventListener('touchend', e => { e.preventDefault(); fn(); });
+        }
+    });
+});
