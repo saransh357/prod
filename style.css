@@ -151,3 +151,15 @@ summary { cursor: pointer; color: var(--text-dim); font-size: 0.9rem; }
     color: var(--text-dim);
     text-align: center;
 }
+#stream-pass {
+    width: 100%;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: white;
+    outline: none;
+}
+
+#stream-pass:focus {
+    border-color: var(--accent-blue);
+}
