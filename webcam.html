@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RVU Major Project | Phone-as-Webcam</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="glass-container">
+        <header class="project-header">
+            <div class="uni-badge">RV UNIVERSITY</div>
+            <h1 class="project-title">Phone-to-Webcam Utility</h1>
+            <p class="project-subtitle">Major Project | Computer Science</p>
+            
+            <div class="author-card">
+                <div class="author-info">
+                    <strong>Developer:</strong> Saransh Kumar
+                    <span>ID: 1rvu22bsc090</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="viewport-section">
+            <div class="video-wrapper">
+                <video autoplay muted playsinline id="webcam-feed">
+                    Your browser does not support HTML video.
+                </video>
+                <div class="status-dot"></div>
+            </div>
+
+            <div class="control-panel">
+                <button class="btn btn-primary" id="btn-back">
+                    <span class="icon">📷</span> Capture Back
+                </button>
+                <button class="btn btn-secondary" id="btn-front">
+                    <span class="icon">🤳</span> Capture Front
+                </button>
+                <button class="btn btn-outline" id="btn-fullscreen">
+                    <span class="icon">⛶</span> Full Screen
+                </button>
+            </div>
+        </main>
+
+        <footer>
+            <details class="instructions">
+                <summary>How to use this utility</summary>
+                <div class="instruction-content">
+                    <ol>
+                        <li>Connect phone to PC via USB cable.</li>
+                        <li>Open this page on your phone & click <strong>Capture Back</strong>.</li>
+                        <li>Enter <strong>Full Screen</strong> on the phone.</li>
+                        <li>In OBS Studio, add a "Video Capture Device" and select your phone.</li>
+                    </ol>
+                </div>
+            </details>
+            <p class="copyright">© 2024 Saransh Kumar • RV University</p>
+        </footer>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
