@@ -15,14 +15,8 @@ var PEER_CONFIG = {
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            // Free TURN relay — required when phone & PC are on different subnets
             {
-                urls: [
-                    'turn:openrelay.metered.ca:80',
-                    'turn:openrelay.metered.ca:80?transport=tcp',
-                    'turn:openrelay.metered.ca:443',
-                    'turn:openrelay.metered.ca:443?transport=tcp'
-                ],
+                urls: ['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],
                 username: 'openrelayproject',
                 credential: 'openrelayproject'
             }
@@ -30,120 +24,120 @@ var PEER_CONFIG = {
     }
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function forcePlayVideo(stream) {
-    var video = document.getElementById('webcam-feed');
-    var overlay = document.getElementById('no-signal');
-    if (!video) { addLog('ERROR: video element not found', 'err'); return; }
-
-    // Detach first to reset state
-    video.srcObject = null;
-    video.load();
-
-    setTimeout(function() {
-        video.srcObject = stream;
-        video.muted = true;        // must be muted for autoplay to work
-        video.playsInline = true;
-        video.autoplay = true;
-
-        var playPromise = video.play();
-        if (playPromise !== undefined) {
-            playPromise.then(function() {
-                addLog('video playing OK', 'ok');
-                if (overlay) overlay.className = 'no-signal hidden';
-            }).catch(function(err) {
-                addLog('autoplay blocked: ' + err.message, 'err');
-                addLog('tap the video area to start playback', '');
-                // Add a one-time click handler so user tap starts it
-                video.addEventListener('click', function handler() {
-                    video.play().catch(function(){});
-                    video.removeEventListener('click', handler);
-                });
-                // Show a tap-to-play overlay
-                if (overlay) {
-                    overlay.className = 'no-signal';
-                    overlay.querySelector('.ns-glitch').textContent = 'TAP TO PLAY';
-                    overlay.querySelector('.ns-sub').textContent = 'STREAM READY — TAP VIDEO TO START';
-                    overlay.style.cursor = 'pointer';
-                    overlay.addEventListener('click', function h() {
-                        video.play().catch(function(){});
-                        overlay.className = 'no-signal hidden';
-                        overlay.removeEventListener('click', h);
-                    });
-                }
-            });
-        }
-    }, 100);
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg, type) {
+    var el = document.getElementById('log');
+    if (!el) return;
+    var d = document.createElement('div');
+    d.className = 'log-line';
+    d.innerHTML = '<span class="log-prompt">$</span><span class="log-' + (type||'def') + '"> ' + msg + '</span>';
+    el.appendChild(d);
+    while (el.children.length > 40) el.removeChild(el.firstChild);
+    el.scrollTop = el.scrollHeight;
 }
 
-function addLog(msg, type) {
-    var terminal = document.getElementById('log');
-    if (!terminal) return;
-    var line = document.createElement('div');
-    line.className = 'log-line';
-    line.innerHTML = '<span class="log-prompt">root@sara:~$</span> <span class="log-msg ' + (type||'') + '">' + msg + '</span>';
-    terminal.appendChild(line);
-    while (terminal.children.length > 30) terminal.removeChild(terminal.firstChild);
-    terminal.scrollTop = terminal.scrollHeight;
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStat(id, val, color) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (color) el.style.color = color;
 }
 
 function setStatus(live, label) {
-    var liveDot   = document.getElementById('live-dot');
-    var liveLabel = document.getElementById('live-label');
-    var statStatus = document.getElementById('stat-status');
-    var noSignal  = document.getElementById('no-signal');
-    var statSignal = document.getElementById('stat-signal');
-    if (liveDot)    liveDot.className      = live ? 'live-dot live' : 'live-dot';
-    if (liveLabel)  liveLabel.textContent  = live ? label : 'OFFLINE';
-    if (statStatus) { statStatus.textContent = live ? label : 'OFFLINE'; statStatus.style.color = live ? 'var(--green)' : 'var(--red)'; }
-    if (noSignal)   noSignal.className     = live ? 'no-signal hidden' : 'no-signal';
-    if (statSignal) statSignal.textContent = live ? 'STRONG' : '--';
+    var dot = document.getElementById('live-dot');
+    var lbl = document.getElementById('live-label');
+    if (dot) dot.className = live ? 'dot live' : 'dot';
+    if (lbl) lbl.textContent = live ? label : 'OFFLINE';
+    setStat('s-status', live ? label : 'OFFLINE', live ? 'var(--green)' : 'var(--red)');
+    setStat('s-signal', live ? 'STRONG' : '--');
     if (live) startUptime(); else stopUptime();
 }
 
+// ── Uptime ────────────────────────────────────────────────────────────────────
 function startUptime() {
     stopUptime();
     startTime = Date.now();
     uptimeTimer = setInterval(function() {
         var e = Math.floor((Date.now() - startTime) / 1000);
-        var h = String(Math.floor(e/3600)).padStart(2,'0');
-        var m = String(Math.floor((e%3600)/60)).padStart(2,'0');
-        var s = String(e%60).padStart(2,'0');
-        var el = document.getElementById('stat-uptime');
-        if (el) el.textContent = h+':'+m+':'+s;
+        setStat('s-uptime',
+            String(Math.floor(e/3600)).padStart(2,'0') + ':' +
+            String(Math.floor((e%3600)/60)).padStart(2,'0') + ':' +
+            String(e%60).padStart(2,'0')
+        );
     }, 1000);
 }
-
 function stopUptime() {
     clearInterval(uptimeTimer);
-    var el = document.getElementById('stat-uptime');
-    if (el) el.textContent = '00:00:00';
+    setStat('s-uptime', '00:00:00');
     startTime = null;
 }
 
-function updateClock() {
-    var pad = function(n) { return String(n).padStart(2,'0'); };
-    var now = new Date();
-    var el = document.getElementById('vid-clock');
-    if (el) el.textContent = pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds());
-}
-setInterval(updateClock, 1000);
-updateClock();
+// ── Clock ─────────────────────────────────────────────────────────────────────
+setInterval(function() {
+    var n = new Date(), p = function(x){ return String(x).padStart(2,'0'); };
+    setStat('vid-clock', p(n.getHours())+':'+p(n.getMinutes())+':'+p(n.getSeconds()));
+}, 1000);
 
-// ── Mode switching ────────────────────────────────────────────────────────────
+// ── Show video ────────────────────────────────────────────────────────────────
+function showVideo(stream) {
+    var vid      = document.getElementById('webcam-feed');
+    var noSig    = document.getElementById('overlay-nosignal');
+    var playOver = document.getElementById('overlay-play');
+
+    if (!vid) { log('video element missing!', 'err'); return; }
+
+    currentStream = stream;
+    vid.srcObject  = stream;
+    vid.muted      = true;   // muted = always autoplays
+
+    log('attaching stream...', 'ok');
+    log('tracks: ' + stream.getTracks().map(function(t){ return t.kind+'('+t.readyState+')'; }).join(', '), 'ok');
+
+    vid.play()
+    .then(function() {
+        log('▶ playing!', 'ok');
+        if (noSig)    noSig.classList.add('hidden');
+        if (playOver) playOver.classList.add('hidden');
+        setStatus(true, 'WATCHING');
+    })
+    .catch(function(err) {
+        log('autoplay blocked: ' + err.message, 'err');
+        log('>>> click the green button <<<', 'ok');
+        if (noSig)    noSig.classList.add('hidden');
+        if (playOver) playOver.classList.remove('hidden');
+        setStatus(true, 'PAUSED');
+    });
+}
+
+// ── Manual play ───────────────────────────────────────────────────────────────
+function manualPlay() {
+    var vid      = document.getElementById('webcam-feed');
+    var playOver = document.getElementById('overlay-play');
+    var noSig    = document.getElementById('overlay-nosignal');
+
+    if (!vid || !currentStream) { log('no stream yet', 'err'); return; }
+    vid.srcObject = currentStream;
+    vid.muted     = true;
+    vid.play()
+    .then(function() {
+        log('▶ manual play OK', 'ok');
+        if (playOver) playOver.classList.add('hidden');
+        if (noSig)    noSig.classList.add('hidden');
+        setStatus(true, 'WATCHING');
+    })
+    .catch(function(e) { log('play err: ' + e.message, 'err'); });
+}
+
+// ── Mode ──────────────────────────────────────────────────────────────────────
 function setMode(m) {
     mode = m;
-    var tb = document.getElementById('tab-broadcast');
-    var tw = document.getElementById('tab-watch');
-    var pb = document.getElementById('panel-broadcast');
-    var pw = document.getElementById('panel-watch');
-    var sm = document.getElementById('stat-mode');
-    if (tb) tb.className = 'tab' + (m==='broadcast' ? ' active' : '');
-    if (tw) tw.className = 'tab' + (m==='watch'     ? ' active' : '');
-    if (pb) pb.style.display = m==='broadcast' ? 'flex' : 'none';
-    if (pw) pw.style.display = m==='watch'     ? 'flex' : 'none';
-    if (sm) sm.textContent = m.toUpperCase();
-    addLog('mode → ' + m.toUpperCase());
+    document.getElementById('tab-broadcast').className = 'tab' + (m==='broadcast'?' active':'');
+    document.getElementById('tab-watch').className     = 'tab' + (m==='watch'    ?' active':'');
+    document.getElementById('panel-broadcast').className = 'btn-stack' + (m==='broadcast'?'':' hidden');
+    document.getElementById('panel-watch').className     = 'btn-stack' + (m==='watch'    ?'':' hidden');
+    setStat('s-mode', m.toUpperCase());
+    log('mode → ' + m.toUpperCase());
 }
 
 // ── Stop ──────────────────────────────────────────────────────────────────────
@@ -151,341 +145,231 @@ function stopStream() {
     clearTimeout(retryTimeout);
     retryCount = 0;
     if (currentStream) { currentStream.getTracks().forEach(function(t){ t.stop(); }); currentStream = null; }
-    if (activeCall)    { try { activeCall.close(); } catch(e){} activeCall = null; }
-    if (peer)          { try { peer.destroy();     } catch(e){} peer = null; }
-    var video = document.getElementById('webcam-feed');
-    if (video) video.srcObject = null;
+    if (activeCall)    { try{ activeCall.close(); }catch(e){} activeCall = null; }
+    if (peer)          { try{ peer.destroy();     }catch(e){} peer = null; }
+    var vid = document.getElementById('webcam-feed');
+    if (vid) vid.srcObject = null;
+    var noSig    = document.getElementById('overlay-nosignal');
+    var playOver = document.getElementById('overlay-play');
+    if (noSig)    noSig.classList.remove('hidden');
+    if (playOver) playOver.classList.add('hidden');
     setStatus(false, 'OFFLINE');
-    addLog('stream terminated.', 'err');
+    log('terminated.', 'err');
 }
 
 // ── BROADCAST ─────────────────────────────────────────────────────────────────
-function startBroadcast(facingMode) {
-    var password = document.getElementById('stream-pass').value.trim();
-    if (!password) { addLog('ERROR: enter auth_key first', 'err'); return; }
+function startBroadcast(facing) {
+    var pass = document.getElementById('stream-pass').value.trim();
+    if (!pass) { log('enter auth key first!', 'err'); return; }
 
     stopStream();
-    addLog('requesting camera: ' + facingMode + '...');
+    log('camera: ' + facing + '...');
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode }, audio: true })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: true })
     .then(function(stream) {
         currentStream = stream;
-        var video = document.getElementById('webcam-feed');
-        if (video) { video.srcObject = stream; video.play(); }
+        var vid = document.getElementById('webcam-feed');
+        if (vid) { vid.srcObject = stream; vid.muted = true; vid.play().catch(function(){}); }
+
+        var noSig = document.getElementById('overlay-nosignal');
+        if (noSig) noSig.classList.add('hidden');
 
         var track = stream.getVideoTracks()[0];
         if (track) {
             var s = track.getSettings();
-            var res = document.getElementById('hud-res');
-            if (res && s.width) res.textContent = s.width + ' × ' + s.height;
+            if (s.width) setStat('hud-res', s.width + ' x ' + s.height);
         }
 
         setStatus(true, 'BROADCASTING');
-        addLog('camera active. connecting relay...');
+        log('camera OK. connecting relay...', 'ok');
 
-        peer = new Peer(password, PEER_CONFIG);
+        peer = new Peer(pass, PEER_CONFIG);
 
         peer.on('open', function(id) {
-            addLog('ready on key: "' + id + '"', 'ok');
-            addLog('waiting for PC...', 'ok');
+            log('ready! key: "' + id + '"', 'ok');
+            log('waiting for PC...', 'ok');
         });
 
         peer.on('call', function(call) {
-            addLog('PC calling — answering...');
+            log('PC calling — answering...', 'ok');
             activeCall = call;
             call.answer(stream);
             setStatus(true, 'LIVE');
-            addLog('PC connected — LIVE', 'ok');
-            call.on('close', function() {
-                setStatus(true, 'BROADCASTING');
-                addLog('PC disconnected.', 'err');
-            });
+            log('LIVE!', 'ok');
+            call.on('close', function(){ setStatus(true,'BROADCASTING'); log('PC disconnected','err'); });
+            call.on('error', function(e){ log('call err: '+e.message,'err'); });
         });
 
-        peer.on('disconnected', function() {
-            addLog('relay lost — reconnecting...', 'err');
-            if (peer && !peer.destroyed) peer.reconnect();
-        });
-
-        peer.on('error', function(err) {
-            if (err.type === 'unavailable-id') {
-                addLog('key in use — choose another', 'err');
-                stopStream();
-            } else {
-                addLog('error: ' + err.type, 'err');
-            }
+        peer.on('disconnected', function(){ if(peer && !peer.destroyed) peer.reconnect(); });
+        peer.on('error', function(e){
+            if (e.type==='unavailable-id') { log('key in use — try another','err'); stopStream(); }
+            else log('peer err: '+e.type,'err');
         });
     })
     .catch(function(e) {
-        addLog('camera denied: ' + e.message, 'err');
-        addLog('go to phone Settings > Safari > Camera > Allow', '');
+        log('camera denied: ' + e.message, 'err');
+        log('Settings > Safari/Chrome > Camera > Allow', '');
     });
 }
 
 // ── WATCH ─────────────────────────────────────────────────────────────────────
 function startWatching() {
-    var password = document.getElementById('stream-pass').value.trim();
-    if (!password) { addLog('ERROR: enter auth_key first', 'err'); return; }
+    var pass = document.getElementById('stream-pass').value.trim();
+    if (!pass) { log('enter auth key first!', 'err'); return; }
     clearTimeout(retryTimeout);
     stopStream();
     retryCount = 0;
-    _doConnect(password);
+    _connect(pass);
 }
 
-function _doConnect(password) {
-    addLog('dialing... (attempt ' + (retryCount+1) + ')');
+function _connect(pass) {
+    log('dialing... attempt ' + (retryCount+1));
+
     peer = new Peer(PEER_CONFIG);
 
-    var openTimer = setTimeout(function() {
-        addLog('relay timeout — retrying...', 'err');
-        _cleanup(); _scheduleRetry(password);
+    var openTimer = setTimeout(function(){
+        log('relay timeout', 'err');
+        _cleanup(); _retry(pass);
     }, 10000);
 
     peer.on('open', function() {
         clearTimeout(openTimer);
-        addLog('relay open. calling broadcaster...');
+        log('relay open. calling broadcaster...');
 
-        // Get a real local stream (video off, audio muted) so ICE negotiation works fully
-        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-        .catch(function() {
-            // If mic denied, use a silent synthetic stream
-            var ctx = new (window.AudioContext || window.webkitAudioContext)();
-            return ctx.createMediaStreamDestination().stream;
-        })
-        .then(function(localStream) {
+        // Use real mic if available, else synthetic silent stream
+        var getLocalStream = navigator.mediaDevices
+            ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function(){
+                var ctx = new (window.AudioContext||window.webkitAudioContext)();
+                return ctx.createMediaStreamDestination().stream;
+              })
+            : Promise.resolve(new MediaStream());
+
+        getLocalStream.then(function(local) {
             var call;
-            try { call = peer.call(password, localStream); } catch(e) {
-                addLog('call failed: ' + e.message, 'err');
-                _cleanup(); _scheduleRetry(password); return;
+            try { call = peer.call(pass, local); } catch(e) {
+                log('call failed: '+e.message,'err'); _cleanup(); _retry(pass); return;
             }
-            if (!call) {
-                addLog('broadcaster not found — is phone broadcasting?', 'err');
-                _cleanup(); _scheduleRetry(password); return;
-            }
-            activeCall = call;
-            addLog('call placed. waiting for stream...');
+            if (!call) { log('broadcaster not found','err'); _cleanup(); _retry(pass); return; }
 
-            // Watch ICE state directly — stream event sometimes fires late
+            activeCall = call;
+            log('ringing...');
             var gotStream = false;
 
-            var streamTimer = setTimeout(function() {
-                if (!gotStream) {
-                    addLog('stream timeout — retrying...', 'err');
-                    _cleanup(); _scheduleRetry(password);
-                }
+            var streamTimer = setTimeout(function(){
+                if (!gotStream) { log('stream timeout','err'); _cleanup(); _retry(pass); }
             }, 20000);
 
-            call.on('stream', function(remoteStream) {
+            // Primary: PeerJS stream event
+            call.on('stream', function(remote) {
                 if (gotStream) return;
                 gotStream = true;
                 clearTimeout(streamTimer);
                 retryCount = 0;
-                currentStream = remoteStream;
-                forcePlayVideo(remoteStream);
-                setStatus(true, 'WATCHING');
-                addLog('stream received — LIVE', 'ok');
-
-                // DEBUG: log what tracks we actually got
-                remoteStream.getTracks().forEach(function(t) {
-                    addLog('track: ' + t.kind + ' | enabled:' + t.enabled + ' | state:' + t.readyState, 'ok');
-                });
-
-                // Try every possible way to show the video
-                setTimeout(function() {
-                    var v = document.getElementById('webcam-feed');
-                    addLog('video.readyState=' + v.readyState + ' paused=' + v.paused + ' srcObject=' + (v.srcObject ? 'SET' : 'NULL'));
-                    if (v.paused) {
-                        v.muted = true;
-                        v.play().then(function(){
-                            addLog('play() succeeded after delay', 'ok');
-                        }).catch(function(e){
-                            addLog('play() failed: ' + e.message, 'err');
-                        });
-                    }
-                }, 1000);
+                log('stream event fired!', 'ok');
+                showVideo(remote);
             });
-            // Also watch peerConnection directly for track events (Safari fallback)
+
+            // Fallback: native RTCPeerConnection track event (Safari)
             if (call.peerConnection) {
-                call.peerConnection.addEventListener('track', function(e) {
+                call.peerConnection.ontrack = function(e) {
                     if (gotStream) return;
                     if (!e.streams || !e.streams[0]) return;
                     gotStream = true;
                     clearTimeout(streamTimer);
                     retryCount = 0;
-                    currentStream = e.streams[0];
-                    forcePlayVideo(e.streams[0]);
-                    setStatus(true, 'WATCHING');
-                    addLog('stream received (track) — LIVE', 'ok');
-                });
-
-                call.peerConnection.addEventListener('iceconnectionstatechange', function() {
-                    var state = call.peerConnection.iceConnectionState;
-                    addLog('ICE: ' + state);
-                    if (state === 'failed') {
-                        clearTimeout(streamTimer);
-                        addLog('ICE failed — TURN server may be needed', 'err');
-                        _cleanup(); _scheduleRetry(password);
-                    }
-                });
+                    log('track event fired!', 'ok');
+                    showVideo(e.streams[0]);
+                };
+                call.peerConnection.oniceconnectionstatechange = function() {
+                    var s = call.peerConnection.iceConnectionState;
+                    log('ICE: ' + s);
+                    if (s==='failed'){ clearTimeout(streamTimer); _cleanup(); _retry(pass); }
+                };
             }
 
-            call.on('close', function() {
-                clearTimeout(streamTimer);
-                setStatus(false, 'OFFLINE');
-                addLog('broadcaster closed stream.', 'err');
-            });
-
-            call.on('error', function(e) {
-                clearTimeout(streamTimer);
-                addLog('call error: ' + (e.message||e.type), 'err');
-                _cleanup(); _scheduleRetry(password);
-            });
+            call.on('close', function(){ clearTimeout(streamTimer); setStatus(false,'OFFLINE'); log('broadcaster closed','err'); });
+            call.on('error', function(e){ clearTimeout(streamTimer); log('call err: '+(e.message||e.type),'err'); _cleanup(); _retry(pass); });
         });
     });
 
     peer.on('error', function(e) {
-        addLog('peer error: ' + e.type, 'err');
-        if (e.type === 'peer-unavailable') {
-            addLog('phone not found — is it broadcasting?', '');
-        }
-        _cleanup(); _scheduleRetry(password);
+        log('peer err: ' + e.type, 'err');
+        if (e.type==='peer-unavailable') log('phone not broadcasting yet?', '');
+        _cleanup(); _retry(pass);
     });
-
-    peer.on('disconnected', function() {
-        addLog('relay disconnected.', 'err');
-        _cleanup(); _scheduleRetry(password);
-    });
+    peer.on('disconnected', function(){ log('relay disconnected','err'); _cleanup(); _retry(pass); });
 }
 
 function _cleanup() {
-    if (activeCall) { try { activeCall.close(); } catch(e){} activeCall = null; }
-    if (peer)       { try { peer.destroy();     } catch(e){} peer = null; }
+    if (activeCall){ try{activeCall.close();}catch(e){} activeCall=null; }
+    if (peer)      { try{peer.destroy();    }catch(e){} peer=null; }
 }
 
-function _scheduleRetry(password) {
+function _retry(pass) {
     if (retryCount >= MAX_RETRIES) {
-        addLog('max retries. press CONNECT FEED to try again.', 'err');
+        log('max retries. tap CONNECT FEED to try again.','err');
         retryCount = 0; return;
     }
     retryCount++;
     var delay = Math.min(retryCount * 2000, 8000);
-    addLog('retry ' + retryCount + '/' + MAX_RETRIES + ' in ' + (delay/1000) + 's...');
-    retryTimeout = setTimeout(function(){ _doConnect(password); }, delay);
+    log('retry ' + retryCount + '/' + MAX_RETRIES + ' in ' + delay/1000 + 's...');
+    retryTimeout = setTimeout(function(){ _connect(pass); }, delay);
 }
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────
 function toggleFullscreen() {
     var el = document.querySelector('.video-frame');
-    if (!document.fullscreenElement) {
-        (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-    } else {
-        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-    }
+    if (!document.fullscreenElement) (el.requestFullscreen||el.webkitRequestFullscreen).call(el);
+    else (document.exitFullscreen||document.webkitExitFullscreen).call(document);
 }
 
 // ── Typewriter ────────────────────────────────────────────────────────────────
-var phrases = ['STREAMING_UTILITY', 'SECURE_CHANNEL', 'CAM_BRIDGE_V2', 'PEER_LINK_ACTIVE'];
-var phraseIdx = 0, charIdx = 0, deleting = false;
-function typewriter() {
-    var el = document.getElementById('typewriter');
-    if (!el) return;
-    var current = phrases[phraseIdx];
-    if (!deleting) {
-        el.textContent = current.slice(0, ++charIdx);
-        if (charIdx === current.length) { deleting = true; setTimeout(typewriter, 2000); return; }
-    } else {
-        el.textContent = current.slice(0, --charIdx);
-        if (charIdx === 0) { deleting = false; phraseIdx = (phraseIdx+1) % phrases.length; }
-    }
-    setTimeout(typewriter, deleting ? 40 : 80);
+var _phrases = ['STREAMING_UTILITY','SECURE_CHANNEL','CAM_BRIDGE_V2','PEER_LINK'];
+var _pi=0,_ci=0,_del=false;
+function typewriter(){
+    var el=document.getElementById('typewriter'); if(!el)return;
+    var cur=_phrases[_pi];
+    if(!_del){el.textContent=cur.slice(0,++_ci);if(_ci===cur.length){_del=true;setTimeout(typewriter,2000);return;}}
+    else{el.textContent=cur.slice(0,--_ci);if(_ci===0){_del=false;_pi=(_pi+1)%_phrases.length;}}
+    setTimeout(typewriter,_del?40:80);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 function boot() {
     var lines = [
-        { msg: 'SARA v3.0 initializing...', type: '' },
-        { msg: 'peer engine... OK',         type: 'ok' },
-        { msg: 'STUN servers... OK',        type: 'ok' },
-        { msg: 'buttons wired... OK',       type: 'ok' },
-        { msg: 'ready. enter key + tap camera button.', type: 'ok' },
+        {m:'SARA v3.1 ready',       t:'ok'},
+        {m:'peer engine OK',        t:'ok'},
+        {m:'STUN/TURN loaded',      t:'ok'},
+        {m:'tap camera to start',   t:'ok'},
     ];
-    var terminal = document.getElementById('log');
-    if (terminal) terminal.innerHTML = '';
-    lines.forEach(function(l, i) {
-        setTimeout(function(){ addLog(l.msg, l.type); }, i * 200);
-    });
+    var el = document.getElementById('log');
+    if (el) el.innerHTML = '';
+    lines.forEach(function(l,i){ setTimeout(function(){ log(l.m,l.t); }, i*200); });
 }
 
-// ── Attach stream to video element ───────────────────────────────────────────
-function attachStream(stream) {
-    var video = document.getElementById('webcam-feed');
-    var noSig = document.getElementById('no-signal');
-    var playOverlay = document.getElementById('play-btn-overlay');
-
-    if (!video) { addLog('ERROR: video element not found', 'err'); return; }
-
-    video.srcObject = stream;
-    video.muted = true;  // muted = autoplay always works in every browser
-
-    video.play()
-    .then(function() {
-        addLog('playback started OK', 'ok');
-        if (noSig)      noSig.className = 'no-signal hidden';
-        if (playOverlay) playOverlay.style.display = 'none';
-        setStatus(true, 'WATCHING');
-    })
-    .catch(function(err) {
-        addLog('autoplay blocked: ' + err.message, 'err');
-        addLog('>>> click PLAY STREAM button <<<', 'ok');
-        // Show the manual play button
-        if (playOverlay) playOverlay.style.display = 'flex';
-        if (noSig)       noSig.className = 'no-signal hidden';
-    });
-}
-
-// ── Manual play triggered by user click ──────────────────────────────────────
-function manualPlay() {
-    var video = document.getElementById('webcam-feed');
-    var playOverlay = document.getElementById('play-btn-overlay');
-    if (!video || !currentStream) { addLog('no stream to play', 'err'); return; }
-    video.srcObject = currentStream;
-    video.muted = true;
-    video.play()
-    .then(function() {
-        if (playOverlay) playOverlay.style.display = 'none';
-        setStatus(true, 'WATCHING');
-        addLog('manual play OK — LIVE', 'ok');
-    })
-    .catch(function(e) { addLog('play failed: ' + e.message, 'err'); });
-}
-
-function forcePlay() { manualPlay(); }
-
-// ── Wire buttons — runs immediately, no DOMContentLoaded needed ───────────────
-// (script is at bottom of body so DOM is already ready)
-function wireButtons() {
-    function wire(id, fn) {
+// ── Wire all buttons ──────────────────────────────────────────────────────────
+// Script is at bottom of <body> so DOM is ready — no DOMContentLoaded needed
+(function wire() {
+    var map = {
+        'tab-broadcast': function(){ setMode('broadcast'); },
+        'tab-watch':     function(){ setMode('watch'); },
+        'btn-back':      function(){ startBroadcast('environment'); },
+        'btn-front':     function(){ startBroadcast('user'); },
+        'btn-stop-b':    function(){ stopStream(); },
+        'btn-connect':   function(){ startWatching(); },
+        'btn-stop-w':    function(){ stopStream(); },
+        'btn-fs':        function(){ toggleFullscreen(); },
+        'btn-manual-play': function(){ manualPlay(); },
+    };
+    Object.keys(map).forEach(function(id) {
         var el = document.getElementById(id);
-        if (!el) { addLog('WARN: #' + id + ' not found', 'err'); return; }
-        // Remove any old listeners by cloning
-        var clone = el.cloneNode(true);
-        el.parentNode.replaceChild(clone, el);
-        clone.addEventListener('click',    function(e){ e.stopPropagation(); fn(); });
-        clone.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); fn(); });
-    }
-
-    wire('tab-broadcast',  function(){ setMode('broadcast'); });
-    wire('tab-watch',      function(){ setMode('watch'); });
-    wire('btn-back-cam',   function(){ startBroadcast('environment'); });
-    wire('btn-front-cam',  function(){ startBroadcast('user'); });
-    wire('btn-stop-bcast', function(){ stopStream(); });
-    wire('btn-connect',    function(){ startWatching(); });
-    wire('btn-disconnect', function(){ stopStream(); });
-    wire('btn-fullscreen', function(){ toggleFullscreen(); });
-
-    addLog('v3.0 — buttons OK', 'ok');
-}
+        if (!el) { console.warn('missing #'+id); return; }
+        var fn = map[id];
+        el.addEventListener('click',    function(e){ e.stopPropagation(); fn(); });
+        el.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); fn(); });
+    });
+    log('buttons wired OK', 'ok');
+})();
 
 boot();
 typewriter();
-wireButtons();
