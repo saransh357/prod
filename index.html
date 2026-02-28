@@ -3,18 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SARA // RVU MAJOR PROJECT</title>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <title>SARA // RVU</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
-
-<!-- Scanline overlay -->
 <div class="scanlines"></div>
-<div class="noise"></div>
-
-<!-- Corner decorations -->
 <div class="corner corner-tl"></div>
 <div class="corner corner-tr"></div>
 <div class="corner corner-bl"></div>
@@ -22,178 +17,123 @@
 
 <div class="wrapper">
 
-    <!-- ── TOP HUD BAR ─────────────────────────────────────── -->
+    <!-- TOP BAR -->
     <header class="hud-bar">
         <div class="hud-left">
-            <span class="sys-tag">SYS://RVU</span>
-            <span class="sep">▶</span>
-            <span class="sys-tag accent" id="typewriter"></span>
+            <span class="dim-text">SYS://RVU ▶</span>
+            <span class="green-text" id="typewriter"></span>
         </div>
         <div class="hud-center">
-            <div class="logo-text">S.A.R.A</div>
+            <div class="logo">S.A.R.A</div>
             <div class="logo-sub">Secure Adaptive Remote Access</div>
         </div>
         <div class="hud-right">
-            <span class="sys-tag">USER: <span class="accent">SARANSH_K</span></span>
-            <span class="sep">|</span>
-            <span class="sys-tag">ID: <span class="accent">1RVU22BSC090</span></span>
+            <span class="dim-text">SARANSH_K // 1RVU22BSC090</span>
         </div>
     </header>
 
-    <!-- ── MAIN GRID ───────────────────────────────────────── -->
+    <!-- MAIN -->
     <main class="main-grid">
 
-        <!-- LEFT PANEL: Controls -->
-        <aside class="panel-left">
-            <div class="panel-header">[ STREAM_CONTROL ]</div>
+        <!-- LEFT PANEL -->
+        <aside class="panel">
+            <div class="panel-title">[ STREAM CONTROL ]</div>
 
-            <!-- Mode tabs -->
-            <div class="mode-tabs">
-                <button class="tab active" id="tab-broadcast">
-                    <span class="tab-icon">▶</span> BROADCAST
-                </button>
-                <button class="tab" id="tab-watch">
-                    <span class="tab-icon">◉</span> RECEIVE
-                </button>
+            <div class="tab-row">
+                <button class="tab active" id="tab-broadcast">▶ BROADCAST</button>
+                <button class="tab"        id="tab-watch">◉ RECEIVE</button>
             </div>
 
-            <!-- Password -->
-            <div class="field-group">
-                <label class="field-label">// AUTH_KEY</label>
+            <div class="field">
+                <div class="field-label">// AUTH KEY</div>
                 <div class="input-wrap">
-                    <span class="input-prefix">$_</span>
-                    <input type="password" id="stream-pass" class="input-field" placeholder="enter_stream_key">
+                    <span class="input-pre">$_</span>
+                    <input id="stream-pass" type="password" class="input-field" placeholder="enter_key">
                 </div>
             </div>
 
-            <!-- Broadcast buttons -->
+            <!-- Broadcast panel -->
             <div id="panel-broadcast" class="btn-stack">
-                <button class="btn btn-primary" id="btn-back-cam">
-                    <span>◈</span> INIT BACK CAM
-                </button>
-                <button class="btn btn-secondary" id="btn-front-cam">
-                    <span>◈</span> INIT FRONT CAM
-                </button>
-                <button class="btn btn-danger" id="btn-stop-bcast">
-                    <span>■</span> TERMINATE
-                </button>
+                <button class="btn btn-green" id="btn-back">◈ BACK CAMERA</button>
+                <button class="btn btn-dim"   id="btn-front">◈ FRONT CAMERA</button>
+                <button class="btn btn-red"   id="btn-stop-b">■ TERMINATE</button>
             </div>
 
-            <!-- Watch buttons -->
-            <div id="panel-watch" class="btn-stack" style="display:none;">
-                <button class="btn btn-primary" id="btn-connect">
-                    <span>◈</span> CONNECT FEED
-                </button>
-                <button class="btn btn-danger" id="btn-disconnect">
-                    <span>■</span> DISCONNECT
-                </button>
+            <!-- Watch panel -->
+            <div id="panel-watch" class="btn-stack hidden">
+                <button class="btn btn-green" id="btn-connect">◈ CONNECT FEED</button>
+                <button class="btn btn-red"   id="btn-stop-w">■ DISCONNECT</button>
             </div>
 
-            <!-- Divider -->
             <div class="divider"></div>
+            <div class="panel-title">[ SYS LOG ]</div>
+            <div class="log" id="log"></div>
 
-            <!-- Log terminal -->
-            <div class="panel-header">[ SYS_LOG ]</div>
-            <div class="log-terminal" id="log">
-                <div class="log-line"><span class="log-prompt">root@sara:~$</span> <span class="log-msg">system initialized...</span></div>
-            </div>
-
-            <!-- Divider -->
             <div class="divider"></div>
-
-            <!-- Stats -->
-            <div class="stats-grid">
-                <div class="stat">
-                    <div class="stat-label">STATUS</div>
-                    <div class="stat-val" id="stat-status">OFFLINE</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">MODE</div>
-                    <div class="stat-val" id="stat-mode">BROADCAST</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">UPTIME</div>
-                    <div class="stat-val" id="stat-uptime">00:00:00</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">SIGNAL</div>
-                    <div class="stat-val" id="stat-signal">--</div>
-                </div>
+            <div class="stats">
+                <div class="stat"><div class="stat-l">STATUS</div><div class="stat-v" id="s-status">OFFLINE</div></div>
+                <div class="stat"><div class="stat-l">MODE</div><div class="stat-v" id="s-mode">BROADCAST</div></div>
+                <div class="stat"><div class="stat-l">UPTIME</div><div class="stat-v" id="s-uptime">00:00:00</div></div>
+                <div class="stat"><div class="stat-l">SIGNAL</div><div class="stat-v" id="s-signal">--</div></div>
             </div>
         </aside>
 
-        <!-- CENTER: Video feed -->
+        <!-- VIDEO -->
         <section class="video-section">
             <div class="video-frame">
-                <!-- Corner brackets -->
                 <div class="vf-corner vf-tl"></div>
                 <div class="vf-corner vf-tr"></div>
                 <div class="vf-corner vf-bl"></div>
                 <div class="vf-corner vf-br"></div>
 
-                <!-- Video -->
+                <!-- Actual video element -->
                 <video id="webcam-feed" autoplay muted playsinline></video>
 
-                <!-- No signal overlay -->
-                <div class="no-signal" id="no-signal">
-                    <div class="ns-glitch">NO_SIGNAL</div>
-                    <div class="ns-sub">AWAITING STREAM INITIALIZATION</div>
-                    <div class="ns-bars">
-                        <span></span><span></span><span></span><span></span><span></span>
-                    </div>
+                <!-- No signal screen -->
+                <div id="overlay-nosignal" class="abs-fill center-flex" style="background:#000;z-index:10;">
+                    <div class="glitch">NO_SIGNAL</div>
+                    <div class="dim-text" style="letter-spacing:3px;margin-top:8px;font-size:0.65rem;">AWAITING STREAM</div>
                 </div>
 
-                <!-- HUD overlays on video -->
-                <div class="vid-hud-top">
-                    <div class="vid-badge">
-                        <div class="live-dot" id="live-dot"></div>
+                <!-- PLAY button (shown when autoplay blocked) -->
+                <div id="overlay-play" class="abs-fill center-flex hidden" style="background:rgba(0,0,0,0.85);z-index:20;">
+                    <button id="btn-manual-play" class="play-btn">▶ CLICK TO PLAY</button>
+                </div>
+
+                <!-- HUD top -->
+                <div class="vid-top">
+                    <div class="live-pill">
+                        <div class="dot" id="live-dot"></div>
                         <span id="live-label">OFFLINE</span>
                     </div>
-                    <div class="vid-timestamp" id="vid-clock">00:00:00</div>
-                    <button class="btn-fs" id="btn-fullscreen">[ FS ]</button>
+                    <div class="green-text mono" id="vid-clock">00:00:00</div>
+                    <button class="fs-btn" id="btn-fs">[ FS ]</button>
                 </div>
 
-                <div class="vid-hud-bottom">
+                <!-- HUD bottom -->
+                <div class="vid-bot">
                     <span class="hud-tag">CAM_FEED_01</span>
-                    <span class="hud-tag" id="hud-res">-- × --</span>
+                    <span class="hud-tag" id="hud-res">-- x --</span>
                     <span class="hud-tag">RVU//CS</span>
-                </div>
-
-                <!-- Crosshair -->
-                <div class="crosshair">
-                    <div class="ch-h"></div>
-                    <div class="ch-v"></div>
                 </div>
             </div>
 
-            <!-- How to use -->
             <details class="how-to">
-                <summary>▶ HOW_TO_USE</summary>
+                <summary>▶ HOW TO USE</summary>
                 <div class="how-body">
-                    <p><span class="accent">01.</span> Open this page on both your <strong>phone</strong> and <strong>PC</strong> — same WiFi or hotspot.</p>
-                    <p><span class="accent">02.</span> Both devices enter the <strong>same AUTH_KEY</strong>.</p>
-                    <p><span class="accent">03.</span> Phone → select <strong>BROADCAST</strong> → tap INIT CAM → allow permissions.</p>
-                    <p><span class="accent">04.</span> PC → select <strong>RECEIVE</strong> → tap CONNECT FEED.</p>
-                    <p><span class="accent">05.</span> Feed appears within seconds. Use <strong>[FS]</strong> for fullscreen.</p>
+                    <p><span class="green-text">01.</span> Open on <strong>phone</strong> and <strong>PC</strong> — same WiFi.</p>
+                    <p><span class="green-text">02.</span> Both enter the <strong>same AUTH KEY</strong>.</p>
+                    <p><span class="green-text">03.</span> Phone → BROADCAST → tap camera button.</p>
+                    <p><span class="green-text">04.</span> PC → RECEIVE → tap CONNECT FEED.</p>
+                    <p><span class="green-text">05.</span> If video doesn't start, click <strong>▶ CLICK TO PLAY</strong>.</p>
                 </div>
             </details>
         </section>
-
     </main>
 
-    <!-- ── BOTTOM BAR ──────────────────────────────────────── -->
-    <footer class="bottom-bar">
-        <span>© 2024 SARANSH KUMAR</span>
-        <span class="sep">//</span>
-        <span>RV UNIVERSITY</span>
-        <span class="sep">//</span>
-        <span>COMPUTER SCIENCE</span>
-        <span class="sep">//</span>
-        <span class="accent">MAJOR PROJECT</span>
-    </footer>
-
+    <footer class="footer">© 2024 SARANSH KUMAR // RV UNIVERSITY // COMPUTER SCIENCE</footer>
 </div>
 
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>
