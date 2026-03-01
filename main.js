@@ -303,14 +303,15 @@
     // ── FORCED 720p SETTINGS ─────────────────────────────────────────────
     // exact = browser MUST deliver this or reject. min = floor it won't go below.
     // TARGET_BITRATE controls how many kbps WebRTC allocates for video.
-    var TARGET_BITRATE_KBPS = 2500;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
+    var TARGET_BITRATE_KBPS = 2700;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
 
     navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: facing,
-        width:      { min: 1280, ideal: 1280, max: 1280 },
-        height:     { min: 720,  ideal: 720,  max: 720  },
-        frameRate:  { min: 25,   ideal: 30,   max: 30   }
+       facingMode: facing,
+    width:  { exact: 1280 }, // Force 720p
+    height: { exact: 720 },
+    // removed 'min' so the browser doesn't fail if it can't hit 25fps
+    frameRate: { ideal: 30, max: 30 }
       },
       audio: {
         echoCancellation: true,
