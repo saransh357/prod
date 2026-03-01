@@ -30,6 +30,27 @@
   };
   // ──────────────────────────────────────────────────────────────────────────
 
+ // =============================================================================
+//  SARA v11.0 — Firebase Realtime DB Signaling + WebRTC
+//  Plain JS, Firebase Compat SDK (loaded via HTML script tags)
+// =============================================================================
+//
+//  FIREBASE SETUP (one-time, 5 minutes):
+//  1. https://console.firebase.google.com → Add project
+//  2. Left menu: Build → Realtime Database → Create database
+//     → pick any region → Start in TEST MODE → Enable
+//  3. Left menu: Project Settings (gear) → scroll to "Your apps"
+//     → click </> → give app a name → Register app
+//  4. Copy the firebaseConfig shown and paste it below
+//  5. Push all 3 files to GitHub Pages — done!
+//
+// =============================================================================
+
+(function () {
+  'use strict';
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   var ICE = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -54,7 +75,6 @@
   var timerID     = null;
   var t0          = null;
   var fbRefs      = [];   // all active firebase listeners for cleanup
-  var QUALITY = 'ultra';
 
   // ── DOM shortcut ───────────────────────────────────────────────────────────
   function get(id) {
@@ -280,9 +300,23 @@
     stopAll();
     L('getting camera (' + facing + ')...');
 
+    // ── FORCED 720p SETTINGS ─────────────────────────────────────────────
+    // exact = browser MUST deliver this or reject. min = floor it won't go below.
+    // TARGET_BITRATE controls how many kbps WebRTC allocates for video.
+    var TARGET_BITRATE_KBPS = 2500;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
+
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing },
-      audio: true
+      video: {
+        facingMode: facing,
+        width:      { min: 1280, ideal: 1280, max: 1280 },
+        height:     { min: 720,  ideal: 720,  max: 720  },
+        frameRate:  { min: 25,   ideal: 30,   max: 30   }
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100
+      }
     })
     .then(function (stream) {
       localStream = stream;
@@ -316,6 +350,31 @@
 
             buildPC(key, false);
             localStream.getTracks().forEach(function (t) { pc.addTrack(t, localStream); });
+
+            // Force bitrate + disable resolution degradation on video senders
+            function enforceQuality() {
+              pc.getSenders().forEach(function (sender) {
+                if (!sender.track || sender.track.kind !== 'video') return;
+                var params = sender.getParameters();
+                if (!params.encodings || params.encodings.length === 0) {
+                  params.encodings = [{}];
+                }
+                params.encodings.forEach(function (enc) {
+                  enc.maxBitrate          = TARGET_BITRATE_KBPS * 1000;
+                  enc.maxFramerate        = 30;
+                  enc.degradationPreference = 'maintain-resolution'; // never drop resolution
+                });
+                sender.setParameters(params).catch(function () {});
+              });
+            }
+
+            // Apply after ICE connects (senders need active connection)
+            pc.addEventListener('iceconnectionstatechange', function () {
+              if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                enforceQuality();
+                L('720p bitrate enforced: ' + TARGET_BITRATE_KBPS + 'kbps', 'ok');
+              }
+            });
 
             pc.createOffer()
               .then(function (o)  { return pc.setLocalDescription(o); })
