@@ -139,7 +139,7 @@ html, body {
 
 #videoEl {
   position:absolute; inset:0; width:100%; height:100%;
-  object-fit:cover; z-index:1; display:block;
+  object-fit:contain; z-index:1; display:block; background:#000;
 }
 
 /* overlays */
@@ -212,4 +212,17 @@ html, body {
   .grid { grid-template-columns:1fr; }
   .vbox { min-height:260px; }
   .hdr-r { display:none; }
+}
+
+/* ── Hide all UI text/HUD when in fullscreen ─────────────────── */
+:fullscreen .hud-t,
+:fullscreen .hud-b,
+:fullscreen .corner,
+:-webkit-full-screen .hud-t,
+:-webkit-full-screen .hud-b,
+:-webkit-full-screen .corner,
+:-moz-full-screen .hud-t,
+:-moz-full-screen .hud-b,
+:-moz-full-screen .corner {
+  display: none !important;
 }
