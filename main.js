@@ -46,10 +46,26 @@
 //
 // =============================================================================
 
-(function () {
-  'use strict';
+// =============================================================================
+//  SARA v11.0 — Firebase Realtime DB Signaling + WebRTC
+//  Plain JS, Firebase Compat SDK (loaded via HTML script tags)
+// =============================================================================
+//
+//  FIREBASE SETUP (one-time, 5 minutes):
+//  1. https://console.firebase.google.com → Add project
+//  2. Left menu: Build → Realtime Database → Create database
+//     → pick any region → Start in TEST MODE → Enable
+//  3. Left menu: Project Settings (gear) → scroll to "Your apps"
+//     → click </> → give app a name → Register app
+//  4. Copy the firebaseConfig shown and paste it below
+//  5. Push all 3 files to GitHub Pages — done!
+//
+// =============================================================================
 
-  // ──────────────────────────────────────────────────────────────────────────
+// (function () {
+//   'use strict';
+
+  // ── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────────
 
   var ICE = {
     iceServers: [
@@ -303,15 +319,14 @@
     // ── FORCED 720p SETTINGS ─────────────────────────────────────────────
     // exact = browser MUST deliver this or reject. min = floor it won't go below.
     // TARGET_BITRATE controls how many kbps WebRTC allocates for video.
-    var TARGET_BITRATE_KBPS = 2700;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
+    var TARGET_BITRATE_KBPS = 2500;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
 
     navigator.mediaDevices.getUserMedia({
       video: {
-       facingMode: facing,
-    width:  { exact: 1280 }, // Force 720p
-    height: { exact: 720 },
-    // removed 'min' so the browser doesn't fail if it can't hit 25fps
-    frameRate: { ideal: 30, max: 30 }
+        facingMode: facing,
+        width:      { min: 1280, ideal: 1280, max: 1280 },
+        height:     { min: 720,  ideal: 720,  max: 720  },
+        frameRate:  { min: 25,   ideal: 30,   max: 30   }
       },
       audio: {
         echoCancellation: true,
