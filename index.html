@@ -1,116 +1,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SARA // RVU</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SARA // RVU</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div class="scanlines"></div>
-<div class="wrap">
 
-  <header class="hdr">
-    <div class="hdr-side">SYS://RVU ▶ <span id="tw"></span></div>
-    <div class="hdr-mid">
-      <div class="logo">S.A.R.A</div>
-      <div class="logo-sub">Secure Adaptive Remote Access</div>
+  <div class="scanlines"></div>
+
+  <div class="wrap">
+
+    <!-- ── HEADER ── -->
+    <header class="hdr">
+      <div class="hdr-side">SYS://RVU &#9658; <span id="tw"></span></div>
+      <div class="hdr-mid">
+        <div class="logo">S.A.R.A</div>
+        <div class="logo-sub">Secure Adaptive Remote Access</div>
+      </div>
+      <div class="hdr-side right">SARANSH_K // 1RVU22BSC090</div>
+    </header>
+
+    <!-- ── MAIN GRID ── -->
+    <div class="grid">
+
+      <!-- LEFT PANEL -->
+      <aside class="panel">
+
+        <div class="ptitle">[ STREAM CONTROL ]</div>
+
+        <!-- Mode tabs -->
+        <div class="tabs">
+          <button class="tab on" id="t-bcast">&#9658; BROADCAST</button>
+          <button class="tab"    id="t-watch">&#9673; RECEIVE</button>
+        </div>
+
+        <!-- Key input -->
+        <div class="ifield">
+          <div class="ilabel">// ROOM KEY</div>
+          <div class="iwrap">
+            <span class="ipre">$_</span>
+            <input id="KEY" type="text" class="inp" placeholder="e.g. sara123" autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- Broadcast buttons -->
+        <div id="p-bcast" class="bstack">
+          <button class="btn bg" id="b-back">&#9654; BACK CAMERA</button>
+          <button class="btn bd" id="b-front">&#9654; FRONT CAMERA</button>
+          <button class="btn br" id="b-stopb">&#9632; TERMINATE</button>
+        </div>
+
+        <!-- Watch buttons -->
+        <div id="p-watch" class="bstack" style="display:none">
+          <button class="btn bg" id="b-conn">&#9654; CONNECT FEED</button>
+          <button class="btn br" id="b-stopw">&#9632; DISCONNECT</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="ptitle">[ SYS LOG ]</div>
+        <div class="log" id="LOG"></div>
+
+        <div class="divider"></div>
+
+        <!-- Stats -->
+        <div class="stats">
+          <div class="stat"><div class="sl">STATUS</div><div class="sv" id="ss">OFFLINE</div></div>
+          <div class="stat"><div class="sl">MODE</div>  <div class="sv" id="sm">BROADCAST</div></div>
+          <div class="stat"><div class="sl">UPTIME</div><div class="sv" id="su">00:00:00</div></div>
+          <div class="stat"><div class="sl">SIGNAL</div><div class="sv" id="sg">--</div></div>
+        </div>
+
+      </aside>
+
+      <!-- VIDEO SECTION -->
+      <section class="vsec">
+
+        <div class="vbox" id="VBOX">
+
+          <!-- Frame corners -->
+          <div class="vc vtl"></div>
+          <div class="vc vtr"></div>
+          <div class="vc vbl"></div>
+          <div class="vc vbr"></div>
+
+          <!-- Video element -->
+          <video id="V" autoplay muted playsinline></video>
+
+          <!-- No signal overlay -->
+          <div id="NS" class="overlay">
+            <div class="glitch">NO_SIGNAL</div>
+            <div class="sub-txt">AWAITING STREAM</div>
+          </div>
+
+          <!-- Click to play overlay -->
+          <div id="PO" class="overlay" style="display:none; background:rgba(0,0,0,0.92)">
+            <button id="b-play" class="pbtn">&#9654; CLICK TO PLAY</button>
+            <div class="sub-txt">tap once to start stream</div>
+          </div>
+
+          <!-- HUD top -->
+          <div class="vhud-t">
+            <div class="vpill">
+              <div class="dot" id="DOT"></div>
+              <span id="LL">OFFLINE</span>
+            </div>
+            <div id="CLK" class="clk">00:00:00</div>
+            <button class="fsbtn" id="b-fs">[ FS ]</button>
+          </div>
+
+          <!-- HUD bottom -->
+          <div class="vhud-b">
+            <span class="htag">CAM_FEED_01</span>
+            <span class="htag" id="RES">-- x --</span>
+            <span class="htag">RVU // CS</span>
+          </div>
+
+        </div>
+
+        <!-- How to use -->
+        <details class="howto">
+          <summary>&#9658; HOW TO USE</summary>
+          <div class="howbody">
+            <p><span class="gc">01.</span> Create a free Firebase project at <strong>console.firebase.google.com</strong></p>
+            <p><span class="gc">02.</span> Build &rarr; Realtime Database &rarr; Create database &rarr; Test mode</p>
+            <p><span class="gc">03.</span> Project Settings &rarr; Add Web App &rarr; copy <strong>firebaseConfig</strong></p>
+            <p><span class="gc">04.</span> Paste config into <strong>main.js</strong> at the top (FIREBASE CONFIG section)</p>
+            <p><span class="gc">05.</span> Phone: BROADCAST tab &rarr; enter room key &rarr; tap camera button</p>
+            <p><span class="gc">06.</span> PC: RECEIVE tab &rarr; same room key &rarr; CONNECT FEED</p>
+            <p><span class="gc">07.</span> If video doesn't start automatically, click <strong>&#9654; CLICK TO PLAY</strong></p>
+          </div>
+        </details>
+
+      </section>
+
     </div>
-    <div class="hdr-side">SARANSH_K // 1RVU22BSC090</div>
-  </header>
 
-  <div class="grid">
+    <footer class="footer">
+      2024 SARANSH KUMAR &nbsp;//&nbsp; RV UNIVERSITY &nbsp;//&nbsp; COMPUTER SCIENCE &nbsp;//&nbsp; MAJOR PROJECT
+    </footer>
 
-    <!-- LEFT PANEL -->
-    <div class="panel">
-      <div class="ptitle">[ STREAM CONTROL ]</div>
-
-      <div class="tabs">
-        <button class="tab on" id="t-bcast">&#9658; BROADCAST</button>
-        <button class="tab"    id="t-watch">&#9673; RECEIVE</button>
-      </div>
-
-      <div class="ifield">
-        <div class="ilabel">// ROOM KEY</div>
-        <div class="iwrap">
-          <span class="ipre">$_</span>
-          <input id="KEY" type="text" class="inp" placeholder="e.g. sara123">
-        </div>
-      </div>
-
-      <div id="p-bcast" class="bstack">
-        <button class="btn bg" id="b-back">BACK CAMERA</button>
-        <button class="btn bd" id="b-front">FRONT CAMERA</button>
-        <button class="btn br" id="b-stopb">TERMINATE</button>
-      </div>
-
-      <div id="p-watch" class="bstack" style="display:none">
-        <button class="btn bg" id="b-conn">CONNECT FEED</button>
-        <button class="btn br" id="b-stopw">DISCONNECT</button>
-      </div>
-
-      <div class="divider"></div>
-      <div class="ptitle">[ SYS LOG ]</div>
-      <div class="log" id="LOG"></div>
-
-      <div class="divider"></div>
-      <div class="stats">
-        <div class="stat"><div class="sl">STATUS</div><div class="sv" id="ss">OFFLINE</div></div>
-        <div class="stat"><div class="sl">MODE</div><div class="sv" id="sm">BROADCAST</div></div>
-        <div class="stat"><div class="sl">UPTIME</div><div class="sv" id="su">00:00:00</div></div>
-        <div class="stat"><div class="sl">SIGNAL</div><div class="sv" id="sg">--</div></div>
-      </div>
-    </div>
-
-    <!-- VIDEO PANEL -->
-    <div class="vsec">
-      <div class="vbox" id="VBOX">
-        <div class="vc vtl"></div><div class="vc vtr"></div>
-        <div class="vc vbl"></div><div class="vc vbr"></div>
-
-        <video id="V" autoplay muted playsinline></video>
-
-        <div id="NS" class="overlay">
-          <div class="glitch">NO_SIGNAL</div>
-          <div class="sub-txt">AWAITING STREAM</div>
-        </div>
-
-        <div id="PO" class="overlay" style="display:none;background:rgba(0,0,0,0.92)">
-          <button id="b-play" class="pbtn">&#9654; CLICK TO PLAY</button>
-          <div class="sub-txt">tap once to start stream</div>
-        </div>
-
-        <div class="vhud-t">
-          <div class="vpill"><div class="dot" id="DOT"></div><span id="LL">OFFLINE</span></div>
-          <div id="CLK" class="clk">00:00:00</div>
-          <button class="fsbtn" id="b-fs">[ FS ]</button>
-        </div>
-        <div class="vhud-b">
-          <span class="htag">CAM_FEED_01</span>
-          <span class="htag" id="RES">-- x --</span>
-          <span class="htag">RVU//CS</span>
-        </div>
-      </div>
-
-      <details class="howto">
-        <summary>HOW TO USE</summary>
-        <div class="howbody">
-          <p><span class="gc">01.</span> Create a free Firebase project at <strong>console.firebase.google.com</strong></p>
-          <p><span class="gc">02.</span> Add a Web App, copy the firebaseConfig object into <strong>main.js</strong> at the top.</p>
-          <p><span class="gc">03.</span> Enable <strong>Realtime Database</strong> in test mode.</p>
-          <p><span class="gc">04.</span> Phone: BROADCAST tab, enter a room key, tap camera.</p>
-          <p><span class="gc">05.</span> PC: RECEIVE tab, same room key, tap CONNECT FEED.</p>
-          <p><span class="gc">06.</span> Click <strong>CLICK TO PLAY</strong> if video does not start.</p>
-        </div>
-      </details>
-    </div>
   </div>
 
-  <footer class="footer">2024 SARANSH KUMAR // RV UNIVERSITY // COMPUTER SCIENCE</footer>
-</div>
+  <!-- Firebase (module) + app logic -->
+  <script type="module" src="main.js"></script>
 
-<!-- Firebase SDKs -->
-<script type="module" src="main.js"></script>
 </body>
 </html>
