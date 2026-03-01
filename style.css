@@ -128,8 +128,8 @@ html, body {
 .vbox {
   position:relative; background:#000;
   border:1px solid var(--bdr); overflow:hidden; min-height:440px;
-  isolation: isolate;  /* creates new stacking context — blocks scanlines overlay */
-  z-index: 100;        /* above the scanlines z-index:50 */
+  /* isolation: isolate;  /* creates new stacking context — blocks scanlines overlay */
+  /* z-index: 100;        /* above the scanlines z-index:50 */ */ */
 }
 .corner { position:absolute; width:16px; height:16px; z-index:5; pointer-events:none; }
 .tl { top:8px;    left:8px;   border-top:2px solid var(--g); border-left:2px solid var(--g); }
