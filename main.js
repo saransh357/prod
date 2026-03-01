@@ -34,28 +34,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 // =============================================================================
-//  SARA v8.0  —  Firebase Compat + Raw WebRTC  —  main.js
-//  No ES modules, no imports. Works on GitHub Pages.
+//  SARA v8.0  —  Firebase Compat SDK  —  Plain JavaScript, no modules
 // =============================================================================
 //
 //  SETUP:
 //  1. console.firebase.google.com → New project
-//  2. Build → Realtime Database → Create → TEST MODE
-//  3. Project Settings (gear) → Add Web App → copy firebaseConfig
-//  4. Paste below, deploy all 3 files.
+//  2. Build → Realtime Database → Create → Test mode
+//  3. Project Settings → Add Web App → copy firebaseConfig below
+//  4. Push all 3 files to GitHub Pages
 //
 // =============================================================================
 
 // ── PASTE YOUR FIREBASE CONFIG HERE ──────────────────────────────────────────
-var firebaseConfig = {
-  apiKey:            "PASTE_YOUR_API_KEY",
-  authDomain:        "PASTE_YOUR_AUTH_DOMAIN",
-  databaseURL:       "PASTE_YOUR_DATABASE_URL",
-  projectId:         "PASTE_YOUR_PROJECT_ID",
-  storageBucket:     "PASTE_YOUR_STORAGE_BUCKET",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId:             "PASTE_YOUR_APP_ID"
-};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 var ICE_CONFIG = {
@@ -81,35 +72,16 @@ var localStream  = null;
 var remoteStream = null;
 var uptimeTimer  = null;
 var startTime    = null;
-var unsubOffer   = null;
-var unsubAnswer  = null;
-var unsubICE     = null;
-
-// ── Firebase init ─────────────────────────────────────────────────────────────
-function initFirebase() {
-  if (firebaseConfig.apiKey === 'PASTE_YOUR_API_KEY') {
-    L('Firebase not configured!', 'err');
-    L('Open main.js and paste your firebaseConfig', 'err');
-    return false;
-  }
-  if (db) return true;
-  try {
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    db = firebase.database();
-    L('Firebase connected', 'ok');
-    return true;
-  } catch (e) {
-    L('Firebase error: ' + e.message, 'err');
-    return false;
-  }
-}
+var fbListeners  = [];
 
 // ── Log ───────────────────────────────────────────────────────────────────────
 function L(msg, type) {
   var el = document.getElementById('LOG');
   var d  = document.createElement('div');
   d.className = 'll';
-  d.innerHTML = '<span class="lp">$</span><span class="l' + (type || 'def') + '"> ' + msg + '</span>';
+  d.innerHTML =
+    '<span class="lp">$</span>' +
+    '<span class="l' + (type || 'def') + '"> ' + msg + '</span>';
   el.appendChild(d);
   while (el.children.length > 60) el.removeChild(el.firstChild);
   el.scrollTop = el.scrollHeight;
@@ -119,18 +91,17 @@ function L(msg, type) {
 function pad(n) { return String(n).padStart(2, '0'); }
 
 setInterval(function () {
-  var n  = new Date();
-  var el = document.getElementById('CLK');
-  if (el) el.textContent = pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
+  var n = new Date();
+  document.getElementById('CLK').textContent =
+    pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
 }, 1000);
 
 function startUptime() {
   stopUptime();
   startTime = Date.now();
   uptimeTimer = setInterval(function () {
-    var e  = Math.floor((Date.now() - startTime) / 1000);
-    var el = document.getElementById('su');
-    if (el) el.textContent =
+    var e = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('su').textContent =
       pad(Math.floor(e / 3600)) + ':' +
       pad(Math.floor((e % 3600) / 60)) + ':' +
       pad(e % 60);
@@ -139,45 +110,74 @@ function startUptime() {
 
 function stopUptime() {
   clearInterval(uptimeTimer);
-  var el = document.getElementById('su');
-  if (el) el.textContent = '00:00:00';
+  document.getElementById('su').textContent = '00:00:00';
   startTime = null;
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
 function setLive(on, label) {
-  var dot = document.getElementById('DOT');
-  var ll  = document.getElementById('LL');
-  var ss  = document.getElementById('ss');
-  var sg  = document.getElementById('sg');
-  if (dot) dot.className  = 'dot' + (on ? ' live' : '');
-  if (ll)  ll.textContent = on ? (label || 'LIVE') : 'OFFLINE';
-  if (ss)  { ss.textContent = on ? (label || 'LIVE') : 'OFFLINE'; ss.style.color = on ? 'var(--green)' : 'var(--red)'; }
-  if (sg)  sg.textContent = on ? 'STRONG' : '--';
-  on ? startUptime() : stopUptime();
+  document.getElementById('DOT').className = 'dot' + (on ? ' live' : '');
+  document.getElementById('LL').textContent = on ? (label || 'LIVE') : 'OFFLINE';
+  var ss = document.getElementById('ss');
+  ss.textContent = on ? (label || 'LIVE') : 'OFFLINE';
+  ss.style.color = on ? 'var(--green)' : 'var(--red)';
+  document.getElementById('sg').textContent = on ? 'STRONG' : '--';
+  if (on) startUptime(); else stopUptime();
 }
 
-// ── Mode ──────────────────────────────────────────────────────────────────────
+// ── Mode switch ───────────────────────────────────────────────────────────────
 function setMode(m) {
-  var b = (m === 'b');
-  document.getElementById('t-bcast').className    = 'tab' + (b  ? ' on' : '');
-  document.getElementById('t-watch').className    = 'tab' + (!b ? ' on' : '');
-  document.getElementById('p-bcast').style.display = b  ? 'flex' : 'none';
-  document.getElementById('p-watch').style.display = !b ? 'flex' : 'none';
-  document.getElementById('sm').textContent       = b ? 'BROADCAST' : 'WATCH';
-  L('mode: ' + (b ? 'BROADCAST' : 'WATCH'));
+  var isBcast = (m === 'b');
+  document.getElementById('t-bcast').className = 'tab' + (isBcast  ? ' on' : '');
+  document.getElementById('t-watch').className = 'tab' + (!isBcast ? ' on' : '');
+  document.getElementById('p-bcast').style.display = isBcast  ? 'flex' : 'none';
+  document.getElementById('p-watch').style.display = !isBcast ? 'flex' : 'none';
+  document.getElementById('sm').textContent = isBcast ? 'BROADCAST' : 'WATCH';
+  L('mode: ' + (isBcast ? 'BROADCAST' : 'WATCH'));
+}
+
+// ── Firebase init ─────────────────────────────────────────────────────────────
+function initFirebase() {
+  if (FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY') {
+    L('Firebase not configured!', 'err');
+    L('Open main.js and paste your firebaseConfig', 'err');
+    return false;
+  }
+  if (db) return true;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    L('Firebase connected', 'ok');
+    return true;
+  } catch (e) {
+    L('Firebase error: ' + e.message, 'err');
+    return false;
+  }
+}
+
+// ── Firebase listener management ──────────────────────────────────────────────
+function fbOn(path, event, fn) {
+  var r = db.ref(path);
+  r.on(event, fn);
+  fbListeners.push({ r: r, event: event, fn: fn });
+}
+
+function fbOff() {
+  fbListeners.forEach(function (l) { l.r.off(l.event, l.fn); });
+  fbListeners = [];
 }
 
 // ── Show remote stream ────────────────────────────────────────────────────────
 function showStream(stream) {
   remoteStream = stream;
-  L('tracks: ' + stream.getTracks().map(function (t) {
-    return t.kind + '(' + t.readyState + ')';
-  }).join(', '), 'ok');
+  L('tracks: ' + stream.getTracks()
+    .map(function (t) { return t.kind + '(' + t.readyState + ')'; })
+    .join(', '), 'ok');
 
   var V  = document.getElementById('V');
   var NS = document.getElementById('NS');
   var PO = document.getElementById('PO');
+
   NS.style.display = 'none';
   V.srcObject = stream;
   V.muted = true;
@@ -189,7 +189,7 @@ function showStream(stream) {
       PO.style.display = 'none';
       setLive(true, 'WATCHING');
     }).catch(function () {
-      L('tap CLICK TO PLAY', 'err');
+      L('tap the CLICK TO PLAY button', 'err');
       PO.style.display = 'flex';
       setLive(true, 'PAUSED');
     });
@@ -199,45 +199,62 @@ function showStream(stream) {
   }
 }
 
-// ── Cleanup ───────────────────────────────────────────────────────────────────
-function cleanListeners() {
-  if (unsubOffer  && db) { /* Firebase compat listeners removed via .off() */ }
-  unsubOffer = unsubAnswer = unsubICE = null;
-}
+// ── Manual play button ────────────────────────────────────────────────────────
+document.getElementById('b-play').addEventListener('click', function () {
+  if (!remoteStream) { L('no stream yet', 'err'); return; }
 
+  var V  = document.getElementById('V');
+  var PO = document.getElementById('PO');
+  var NS = document.getElementById('NS');
+
+  var nv = document.createElement('video');
+  nv.id          = 'V';
+  nv.autoplay    = true;
+  nv.muted       = true;
+  nv.playsInline = true;
+  nv.setAttribute('playsinline', '');
+  nv.style.cssText =
+    'position:absolute;top:0;left:0;width:100%;height:100%;' +
+    'object-fit:cover;z-index:1;display:block;';
+  nv.srcObject = remoteStream;
+  V.parentNode.replaceChild(nv, V);
+
+  nv.play().then(function () {
+    PO.style.display = 'none';
+    NS.style.display = 'none';
+    setLive(true, 'WATCHING');
+    L('manual play OK', 'ok');
+  }).catch(function (e) {
+    L('play error: ' + e.message, 'err');
+  });
+});
+
+// ── Stop / cleanup ────────────────────────────────────────────────────────────
 function closePc() {
   if (pc) { try { pc.close(); } catch (e) {} pc = null; }
 }
 
 function stop() {
-  // Detach Firebase listeners
-  var k = document.getElementById('KEY').value.trim();
-  if (db && k) {
-    db.ref('rooms/' + k + '/answer').off();
-    db.ref('rooms/' + k + '/watcherICE').off();
-    db.ref('rooms/' + k + '/watcherReady').off();
-    db.ref('rooms/' + k + '/offer').off();
-    db.ref('rooms/' + k + '/broadcasterICE').off();
-    db.ref('rooms/' + k).remove().catch(function () {});
-  }
-  cleanListeners();
+  fbOff();
   closePc();
-
   if (localStream)  { localStream.getTracks().forEach(function (t) { t.stop(); });  localStream  = null; }
   if (remoteStream) { remoteStream.getTracks().forEach(function (t) { t.stop(); }); remoteStream = null; }
 
   var V  = document.getElementById('V');
   var NS = document.getElementById('NS');
   var PO = document.getElementById('PO');
-  if (V)  V.srcObject      = null;
+  if (V)  V.srcObject = null;
   if (NS) NS.style.display = 'flex';
   if (PO) PO.style.display = 'none';
 
   setLive(false);
   L('stopped.', 'err');
+
+  var k = document.getElementById('KEY').value.trim();
+  if (db && k) db.ref('rooms/' + k).remove().catch(function () {});
 }
 
-// ── RTCPeerConnection factory ─────────────────────────────────────────────────
+// ── Build RTCPeerConnection ───────────────────────────────────────────────────
 function makePc(roomKey, isCaller) {
   var conn = new RTCPeerConnection(ICE_CONFIG);
 
@@ -251,7 +268,6 @@ function makePc(roomKey, isCaller) {
 
   conn.oniceconnectionstatechange = function () {
     L('ICE: ' + conn.iceConnectionState);
-    if (conn.iceConnectionState === 'connected' || conn.iceConnectionState === 'completed') L('ICE OK!', 'ok');
     if (conn.iceConnectionState === 'failed') L('ICE failed — check network', 'err');
   };
 
@@ -264,7 +280,7 @@ function makePc(roomKey, isCaller) {
 }
 
 // =============================================================================
-//  BROADCAST (phone)
+//  BROADCAST  (use on phone)
 // =============================================================================
 function broadcast(facingMode) {
   var k = document.getElementById('KEY').value.trim();
@@ -272,10 +288,12 @@ function broadcast(facingMode) {
   if (!initFirebase()) return;
   stop();
 
-  L('requesting camera...');
+  L('requesting camera (' + facingMode + ')...');
+
   navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode }, audio: true })
     .then(function (stream) {
       localStream = stream;
+
       var V  = document.getElementById('V');
       var NS = document.getElementById('NS');
       NS.style.display = 'none';
@@ -290,33 +308,43 @@ function broadcast(facingMode) {
       }
 
       setLive(true, 'BROADCASTING');
+      L('camera OK. cleaning room...', 'ok');
+
       return db.ref('rooms/' + k).remove();
     })
     .then(function () {
       L('waiting for viewer...', 'ok');
 
-      db.ref('rooms/' + k + '/answer').on('value', function (snap) {
+      // Listen for viewer's answer
+      fbOn('rooms/' + k + '/answer', 'value', function (snap) {
         var data = snap.val();
-        if (!data || !pc || pc.signalingState !== 'have-local-offer') return;
-        pc.setRemoteDescription(new RTCSessionDescription(data))
-          .then(function () { L('remote desc set', 'ok'); })
-          .catch(function (e) { L('setRemote err: ' + e.message, 'err'); });
+        if (!data || !pc) return;
+        if (pc.signalingState === 'have-local-offer') {
+          pc.setRemoteDescription(new RTCSessionDescription(data))
+            .then(function () { L('remote desc set', 'ok'); })
+            .catch(function (e) { L('setRemote err: ' + e.message, 'err'); });
+        }
       });
 
-      db.ref('rooms/' + k + '/watcherICE').on('child_added', function (snap) {
+      // Listen for viewer's ICE candidates
+      fbOn('rooms/' + k + '/watcherICE', 'child_added', function (snap) {
         var c = snap.val();
-        if (c && pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
+        if (!c || !pc) return;
+        pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
       });
 
-      db.ref('rooms/' + k + '/watcherReady').on('value', function (snap) {
+      // When viewer is ready → send offer
+      fbOn('rooms/' + k + '/watcherReady', 'value', function (snap) {
         if (!snap.val()) return;
-        L('viewer joined! sending offer...', 'ok');
+        L('viewer joined! creating offer...', 'ok');
         setLive(true, 'LIVE');
+
         closePc();
         pc = makePc(k, false);
         localStream.getTracks().forEach(function (t) { pc.addTrack(t, localStream); });
+
         pc.createOffer()
-          .then(function (o) { return pc.setLocalDescription(o); })
+          .then(function (offer) { return pc.setLocalDescription(offer); })
           .then(function () {
             return db.ref('rooms/' + k + '/offer').set({
               type: pc.localDescription.type,
@@ -328,13 +356,13 @@ function broadcast(facingMode) {
       });
     })
     .catch(function (e) {
-      L('camera denied: ' + e.message, 'err');
-      L('Go to browser settings and allow camera', '');
+      L('error: ' + e.message, 'err');
+      if (e.name === 'NotAllowedError') L('Settings > Camera > Allow', '');
     });
 }
 
 // =============================================================================
-//  WATCH (PC)
+//  WATCH  (use on PC)
 // =============================================================================
 function watch() {
   var k = document.getElementById('KEY').value.trim();
@@ -344,65 +372,52 @@ function watch() {
 
   L('joining room "' + k + '"...');
 
-  var getAudio = navigator.mediaDevices
-    ? navigator.mediaDevices.getUserMedia({ audio: true, video: false }).catch(function () { return new MediaStream(); })
-    : Promise.resolve(new MediaStream());
+  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    .catch(function () { return new MediaStream(); })
+    .then(function (localAudio) {
+      pc = makePc(k, true);
+      localAudio.getTracks().forEach(function (t) { pc.addTrack(t, localAudio); });
 
-  getAudio.then(function (localAudio) {
-    pc = makePc(k, true);
-    localAudio.getTracks().forEach(function (t) { pc.addTrack(t, localAudio); });
-    return db.ref('rooms/' + k + '/watcherReady').set(true);
-  })
-  .then(function () {
-    L('waiting for broadcaster offer...', 'ok');
+      db.ref('rooms/' + k + '/watcherReady').set(true)
+        .then(function () { L('waiting for broadcaster offer...', 'ok'); });
 
-    db.ref('rooms/' + k + '/offer').on('value', function (snap) {
-      var data = snap.val();
-      if (!data || !pc || pc.signalingState !== 'stable') return;
-      L('offer received — answering...', 'ok');
-      pc.setRemoteDescription(new RTCSessionDescription(data))
-        .then(function () { return pc.createAnswer(); })
-        .then(function (a) { return pc.setLocalDescription(a); })
-        .then(function () {
-          return db.ref('rooms/' + k + '/answer').set({
-            type: pc.localDescription.type,
-            sdp:  pc.localDescription.sdp
-          });
-        })
-        .then(function () { L('answer sent', 'ok'); })
-        .catch(function (e) { L('answer err: ' + e.message, 'err'); });
+      // Listen for broadcaster's offer
+      fbOn('rooms/' + k + '/offer', 'value', function (snap) {
+        var data = snap.val();
+        if (!data || !pc) return;
+        if (pc.signalingState !== 'stable') return;
+
+        L('offer received — answering...', 'ok');
+        pc.setRemoteDescription(new RTCSessionDescription(data))
+          .then(function () { return pc.createAnswer(); })
+          .then(function (answer) { return pc.setLocalDescription(answer); })
+          .then(function () {
+            return db.ref('rooms/' + k + '/answer').set({
+              type: pc.localDescription.type,
+              sdp:  pc.localDescription.sdp
+            });
+          })
+          .then(function () { L('answer sent', 'ok'); })
+          .catch(function (e) { L('answer err: ' + e.message, 'err'); });
+      });
+
+      // Listen for broadcaster's ICE candidates
+      fbOn('rooms/' + k + '/broadcasterICE', 'child_added', function (snap) {
+        var c = snap.val();
+        if (!c || !pc) return;
+        pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
+      });
     });
-
-    db.ref('rooms/' + k + '/broadcasterICE').on('child_added', function (snap) {
-      var c = snap.val();
-      if (c && pc) pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
-    });
-  })
-  .catch(function (e) { L('watch error: ' + e.message, 'err'); });
 }
-
-// ── Manual play button ────────────────────────────────────────────────────────
-document.getElementById('b-play').addEventListener('click', function () {
-  if (!remoteStream) { L('no stream yet', 'err'); return; }
-  var V  = document.getElementById('V');
-  var PO = document.getElementById('PO');
-  var NS = document.getElementById('NS');
-  var nv = document.createElement('video');
-  nv.id = 'V'; nv.autoplay = true; nv.muted = true; nv.playsInline = true;
-  nv.setAttribute('playsinline', '');
-  nv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
-  nv.srcObject = remoteStream;
-  V.parentNode.replaceChild(nv, V);
-  nv.play()
-    .then(function () { PO.style.display = 'none'; NS.style.display = 'none'; setLive(true, 'WATCHING'); L('playing!', 'ok'); })
-    .catch(function (e) { L('play err: ' + e.message, 'err'); });
-});
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────
 document.getElementById('b-fs').addEventListener('click', function () {
   var el = document.getElementById('VBOX');
-  if (!document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-  else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
 });
 
 // ── Wire all buttons ──────────────────────────────────────────────────────────
@@ -420,8 +435,15 @@ Object.keys(BUTTONS).forEach(function (id) {
   var el = document.getElementById(id);
   if (!el) { console.warn('Button not found: #' + id); return; }
   var fn = BUTTONS[id];
-  el.addEventListener('click',    function (e) { e.stopPropagation(); fn(); });
-  el.addEventListener('touchend', function (e) { e.preventDefault();  e.stopPropagation(); fn(); });
+  el.addEventListener('click', function (e) {
+    e.stopPropagation();
+    fn();
+  });
+  el.addEventListener('touchend', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fn();
+  });
 });
 
 // ── Typewriter ────────────────────────────────────────────────────────────────
@@ -444,10 +466,10 @@ function typewriter() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 [
-  { m: 'SARA v8.0 — compat mode',      t: 'ok'  },
+  { m: 'SARA v8.0 ready',              t: 'ok'  },
   { m: 'buttons wired OK',             t: 'ok'  },
-  { m: 'paste firebaseConfig in main.js', t: 'err' },
-  { m: 'then push to GitHub Pages',    t: ''    }
+  { m: 'Firebase compat SDK loaded',   t: 'ok'  },
+  { m: 'paste firebaseConfig to begin',t: 'err' }
 ].forEach(function (line, i) {
   setTimeout(function () { L(line.m, line.t); }, i * 200);
 });
