@@ -11,20 +11,28 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { initializeApp }         from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, set, onValue, remove, push, onChildAdded }
-  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-// ─── PASTE YOUR FIREBASE CONFIG HERE ─────────────────────────────────────────
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey:            "PASTE_YOUR_API_KEY",
-  authDomain:        "PASTE_YOUR_AUTH_DOMAIN",
-  databaseURL:       "PASTE_YOUR_DATABASE_URL",
-  projectId:         "PASTE_YOUR_PROJECT_ID",
-  storageBucket:     "PASTE_YOUR_STORAGE_BUCKET",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId:             "PASTE_YOUR_APP_ID"
+  apiKey: "AIzaSyBjpAVzhN_FPcBvnSKeAV8uJ5tXZk9URSU",
+  authDomain: "main-prod-5c92e.firebaseapp.com",
+  databaseURL: "https://main-prod-5c92e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "main-prod-5c92e",
+  storageBucket: "main-prod-5c92e.firebasestorage.app",
+  messagingSenderId: "958395880276",
+  appId: "1:958395880276:web:56635073fa9e1ba446aec1",
+  measurementId: "G-9CQH2TH7W1"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ICE_SERVERS = {
