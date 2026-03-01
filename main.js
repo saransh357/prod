@@ -1,477 +1,427 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// SARA v6.0 — Firebase Signaling + Raw WebRTC (no PeerJS)
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// SETUP (one time):
-//  1. Go to https://console.firebase.google.com
-//  2. Create a project (free)
-//  3. Add a Web App → copy the firebaseConfig below
-//  4. Go to Build → Realtime Database → Create database → Start in TEST MODE
-//  5. Deploy these files to GitHub Pages
-//
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBjpAVzhN_FPcBvnSKeAV8uJ5tXZk9URSU",
-  authDomain: "main-prod-5c92e.firebaseapp.com",
-  databaseURL: "https://main-prod-5c92e-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "main-prod-5c92e",
-  storageBucket: "main-prod-5c92e.firebasestorage.app",
-  messagingSenderId: "958395880276",
-  appId: "1:958395880276:web:56635073fa9e1ba446aec1",
-  measurementId: "G-9CQH2TH7W1"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 // =============================================================================
-//  SARA v8.0  —  Firebase Compat SDK  —  Plain JavaScript, no modules
-// =============================================================================
+//  SARA v10.0 — Copy-Paste WebRTC Signaling
+//  NO server, NO Firebase, NO PeerJS needed.
+//  Works on any device, any network.
 //
-//  SETUP:
-//  1. console.firebase.google.com → New project
-//  2. Build → Realtime Database → Create → Test mode
-//  3. Project Settings → Add Web App → copy firebaseConfig below
-//  4. Push all 3 files to GitHub Pages
-//
+//  HOW IT WORKS:
+//  1. Phone creates an "offer" (text blob) → you copy it
+//  2. You paste it on PC → PC creates an "answer" (text blob) → you copy it
+//  3. You paste the answer back on phone → stream starts
+//  Transfer via WhatsApp, SMS, email, or anything!
 // =============================================================================
 
-// ── PASTE YOUR FIREBASE CONFIG HERE ──────────────────────────────────────────
+(function () {
 
-// ─────────────────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function $(id) { return document.getElementById(id); }
 
-var ICE_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    {
-      urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp'
-      ],
-      username:   'openrelayproject',
-      credential: 'openrelayproject'
-    }
-  ]
-};
+  function log(msg, type) {
+    var box = $('log');
+    var row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = '<span class="log-pre">$</span><span class="' + (type || 'def') + '"> ' + msg + '</span>';
+    box.appendChild(row);
+    if (box.children.length > 80) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  }
 
-// ── State ─────────────────────────────────────────────────────────────────────
-var db           = null;
-var pc           = null;
-var localStream  = null;
-var remoteStream = null;
-var uptimeTimer  = null;
-var startTime    = null;
-var fbListeners  = [];
+  function pad(n) { return String(n).padStart(2, '0'); }
 
-// ── Log ───────────────────────────────────────────────────────────────────────
-function L(msg, type) {
-  var el = document.getElementById('LOG');
-  var d  = document.createElement('div');
-  d.className = 'll';
-  d.innerHTML =
-    '<span class="lp">$</span>' +
-    '<span class="l' + (type || 'def') + '"> ' + msg + '</span>';
-  el.appendChild(d);
-  while (el.children.length > 60) el.removeChild(el.firstChild);
-  el.scrollTop = el.scrollHeight;
-}
-
-// ── Clock ─────────────────────────────────────────────────────────────────────
-function pad(n) { return String(n).padStart(2, '0'); }
-
-setInterval(function () {
-  var n = new Date();
-  document.getElementById('CLK').textContent =
-    pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
-}, 1000);
-
-function startUptime() {
-  stopUptime();
-  startTime = Date.now();
-  uptimeTimer = setInterval(function () {
-    var e = Math.floor((Date.now() - startTime) / 1000);
-    document.getElementById('su').textContent =
-      pad(Math.floor(e / 3600)) + ':' +
-      pad(Math.floor((e % 3600) / 60)) + ':' +
-      pad(e % 60);
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  setInterval(function () {
+    var d = new Date();
+    $('clock').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }, 1000);
-}
 
-function stopUptime() {
-  clearInterval(uptimeTimer);
-  document.getElementById('su').textContent = '00:00:00';
-  startTime = null;
-}
+  var uptimer = null;
+  var t0 = null;
 
-// ── Status ────────────────────────────────────────────────────────────────────
-function setLive(on, label) {
-  document.getElementById('DOT').className = 'dot' + (on ? ' live' : '');
-  document.getElementById('LL').textContent = on ? (label || 'LIVE') : 'OFFLINE';
-  var ss = document.getElementById('ss');
-  ss.textContent = on ? (label || 'LIVE') : 'OFFLINE';
-  ss.style.color = on ? 'var(--green)' : 'var(--red)';
-  document.getElementById('sg').textContent = on ? 'STRONG' : '--';
-  if (on) startUptime(); else stopUptime();
-}
-
-// ── Mode switch ───────────────────────────────────────────────────────────────
-function setMode(m) {
-  var isBcast = (m === 'b');
-  document.getElementById('t-bcast').className = 'tab' + (isBcast  ? ' on' : '');
-  document.getElementById('t-watch').className = 'tab' + (!isBcast ? ' on' : '');
-  document.getElementById('p-bcast').style.display = isBcast  ? 'flex' : 'none';
-  document.getElementById('p-watch').style.display = !isBcast ? 'flex' : 'none';
-  document.getElementById('sm').textContent = isBcast ? 'BROADCAST' : 'WATCH';
-  L('mode: ' + (isBcast ? 'BROADCAST' : 'WATCH'));
-}
-
-// ── Firebase init ─────────────────────────────────────────────────────────────
-function initFirebase() {
-  if (FIREBASE_CONFIG.apiKey === 'PASTE_YOUR_API_KEY') {
-    L('Firebase not configured!', 'err');
-    L('Open main.js and paste your firebaseConfig', 'err');
-    return false;
+  function startTimer() {
+    stopTimer();
+    t0 = Date.now();
+    uptimer = setInterval(function () {
+      var s = Math.floor((Date.now() - t0) / 1000);
+      $('statUptime').textContent =
+        pad(Math.floor(s / 3600)) + ':' +
+        pad(Math.floor((s % 3600) / 60)) + ':' +
+        pad(s % 60);
+    }, 1000);
   }
-  if (db) return true;
-  try {
-    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    db = firebase.database();
-    L('Firebase connected', 'ok');
-    return true;
-  } catch (e) {
-    L('Firebase error: ' + e.message, 'err');
-    return false;
+
+  function stopTimer() {
+    clearInterval(uptimer);
+    $('statUptime').textContent = '00:00:00';
+    t0 = null;
   }
-}
 
-// ── Firebase listener management ──────────────────────────────────────────────
-function fbOn(path, event, fn) {
-  var r = db.ref(path);
-  r.on(event, fn);
-  fbListeners.push({ r: r, event: event, fn: fn });
-}
+  // ── Live indicator ──────────────────────────────────────────────────────────
+  function setLive(on, label) {
+    $('liveDot').className = 'dot' + (on ? ' live' : '');
+    $('liveLabel').textContent = on ? (label || 'LIVE') : 'OFFLINE';
+    $('statStatus').textContent = on ? (label || 'LIVE') : 'OFFLINE';
+    $('statStatus').style.color = on ? 'var(--g)' : 'var(--r)';
+    if (on) startTimer(); else stopTimer();
+  }
 
-function fbOff() {
-  fbListeners.forEach(function (l) { l.r.off(l.event, l.fn); });
-  fbListeners = [];
-}
+  // ── Step management ─────────────────────────────────────────────────────────
+  function activateStep(stepId) {
+    var steps = ['step1', 'step2', 'step3', 'pcStep1', 'pcStep2'];
+    steps.forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.classList.toggle('dimmed', id !== stepId);
+    });
+  }
 
-// ── Show remote stream ────────────────────────────────────────────────────────
-function showStream(stream) {
-  remoteStream = stream;
-  L('tracks: ' + stream.getTracks()
-    .map(function (t) { return t.kind + '(' + t.readyState + ')'; })
-    .join(', '), 'ok');
+  // ── ICE config ──────────────────────────────────────────────────────────────
+  var ICE = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  };
 
-  var V  = document.getElementById('V');
-  var NS = document.getElementById('NS');
-  var PO = document.getElementById('PO');
+  // ── State ────────────────────────────────────────────────────────────────────
+  var pc          = null;
+  var localStream = null;
+  var remoteStream = null;
 
-  NS.style.display = 'none';
-  V.srcObject = stream;
-  V.muted = true;
+  // ── Destroy peer connection ──────────────────────────────────────────────────
+  function destroyPc() {
+    if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  }
 
-  var p = V.play();
-  if (p && p.then) {
-    p.then(function () {
-      L('LIVE!', 'ok');
-      PO.style.display = 'none';
+  // ── Show stream on video ─────────────────────────────────────────────────────
+  function showStream(stream) {
+    remoteStream = stream;
+    var tracks = stream.getTracks().map(function (t) { return t.kind + '(' + t.readyState + ')'; }).join(', ');
+    log('stream: ' + tracks, 'ok');
+
+    var vid = $('videoEl');
+    $('overlayNoSig').classList.add('hidden');
+    vid.srcObject = stream;
+    vid.muted = true;
+
+    vid.play().then(function () {
+      log('playing!', 'ok');
+      $('overlayPlay').classList.add('hidden');
       setLive(true, 'WATCHING');
     }).catch(function () {
-      L('tap the CLICK TO PLAY button', 'err');
-      PO.style.display = 'flex';
+      log('tap CLICK TO PLAY', 'err');
+      $('overlayPlay').classList.remove('hidden');
       setLive(true, 'PAUSED');
     });
-  } else {
-    PO.style.display = 'none';
-    setLive(true, 'WATCHING');
   }
-}
 
-// ── Manual play button ────────────────────────────────────────────────────────
-document.getElementById('b-play').addEventListener('click', function () {
-  if (!remoteStream) { L('no stream yet', 'err'); return; }
+  // ── Build RTCPeerConnection ──────────────────────────────────────────────────
+  function buildPc() {
+    destroyPc();
+    pc = new RTCPeerConnection(ICE);
 
-  var V  = document.getElementById('V');
-  var PO = document.getElementById('PO');
-  var NS = document.getElementById('NS');
-
-  var nv = document.createElement('video');
-  nv.id          = 'V';
-  nv.autoplay    = true;
-  nv.muted       = true;
-  nv.playsInline = true;
-  nv.setAttribute('playsinline', '');
-  nv.style.cssText =
-    'position:absolute;top:0;left:0;width:100%;height:100%;' +
-    'object-fit:cover;z-index:1;display:block;';
-  nv.srcObject = remoteStream;
-  V.parentNode.replaceChild(nv, V);
-
-  nv.play().then(function () {
-    PO.style.display = 'none';
-    NS.style.display = 'none';
-    setLive(true, 'WATCHING');
-    L('manual play OK', 'ok');
-  }).catch(function (e) {
-    L('play error: ' + e.message, 'err');
-  });
-});
-
-// ── Stop / cleanup ────────────────────────────────────────────────────────────
-function closePc() {
-  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
-}
-
-function stop() {
-  fbOff();
-  closePc();
-  if (localStream)  { localStream.getTracks().forEach(function (t) { t.stop(); });  localStream  = null; }
-  if (remoteStream) { remoteStream.getTracks().forEach(function (t) { t.stop(); }); remoteStream = null; }
-
-  var V  = document.getElementById('V');
-  var NS = document.getElementById('NS');
-  var PO = document.getElementById('PO');
-  if (V)  V.srcObject = null;
-  if (NS) NS.style.display = 'flex';
-  if (PO) PO.style.display = 'none';
-
-  setLive(false);
-  L('stopped.', 'err');
-
-  var k = document.getElementById('KEY').value.trim();
-  if (db && k) db.ref('rooms/' + k).remove().catch(function () {});
-}
-
-// ── Build RTCPeerConnection ───────────────────────────────────────────────────
-function makePc(roomKey, isCaller) {
-  var conn = new RTCPeerConnection(ICE_CONFIG);
-
-  conn.onicecandidate = function (e) {
-    if (!e.candidate) return;
-    var path = isCaller
-      ? 'rooms/' + roomKey + '/watcherICE'
-      : 'rooms/' + roomKey + '/broadcasterICE';
-    db.ref(path).push(e.candidate.toJSON()).catch(function () {});
-  };
-
-  conn.oniceconnectionstatechange = function () {
-    L('ICE: ' + conn.iceConnectionState);
-    if (conn.iceConnectionState === 'failed') L('ICE failed — check network', 'err');
-  };
-
-  conn.ontrack = function (e) {
-    L('track received!', 'ok');
-    if (e.streams && e.streams[0]) showStream(e.streams[0]);
-  };
-
-  return conn;
-}
-
-// =============================================================================
-//  BROADCAST  (use on phone)
-// =============================================================================
-function broadcast(facingMode) {
-  var k = document.getElementById('KEY').value.trim();
-  if (!k) { L('enter a room key first!', 'err'); return; }
-  if (!initFirebase()) return;
-  stop();
-
-  L('requesting camera (' + facingMode + ')...');
-
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode }, audio: true })
-    .then(function (stream) {
-      localStream = stream;
-
-      var V  = document.getElementById('V');
-      var NS = document.getElementById('NS');
-      NS.style.display = 'none';
-      V.srcObject = localStream;
-      V.muted = true;
-      V.play().catch(function () {});
-
-      var track = localStream.getVideoTracks()[0];
-      if (track) {
-        var s = track.getSettings();
-        if (s.width) document.getElementById('RES').textContent = s.width + 'x' + s.height;
-      }
-
-      setLive(true, 'BROADCASTING');
-      L('camera OK. cleaning room...', 'ok');
-
-      return db.ref('rooms/' + k).remove();
-    })
-    .then(function () {
-      L('waiting for viewer...', 'ok');
-
-      // Listen for viewer's answer
-      fbOn('rooms/' + k + '/answer', 'value', function (snap) {
-        var data = snap.val();
-        if (!data || !pc) return;
-        if (pc.signalingState === 'have-local-offer') {
-          pc.setRemoteDescription(new RTCSessionDescription(data))
-            .then(function () { L('remote desc set', 'ok'); })
-            .catch(function (e) { L('setRemote err: ' + e.message, 'err'); });
-        }
-      });
-
-      // Listen for viewer's ICE candidates
-      fbOn('rooms/' + k + '/watcherICE', 'child_added', function (snap) {
-        var c = snap.val();
-        if (!c || !pc) return;
-        pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
-      });
-
-      // When viewer is ready → send offer
-      fbOn('rooms/' + k + '/watcherReady', 'value', function (snap) {
-        if (!snap.val()) return;
-        L('viewer joined! creating offer...', 'ok');
+    pc.oniceconnectionstatechange = function () {
+      log('ICE: ' + pc.iceConnectionState);
+      $('statIce').textContent = pc.iceConnectionState.toUpperCase();
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        log('connected!', 'ok');
         setLive(true, 'LIVE');
+      }
+    };
 
-        closePc();
-        pc = makePc(k, false);
+    pc.ontrack = function (evt) {
+      log('track received!', 'ok');
+      if (evt.streams && evt.streams[0]) showStream(evt.streams[0]);
+    };
+
+    return pc;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  //  PHONE FLOW
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  function startCamera(facing) {
+    log('requesting ' + facing + ' camera...');
+    destroyPc();
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: true })
+      .then(function (stream) {
+        localStream = stream;
+
+        // Show preview
+        var vid = $('videoEl');
+        $('overlayNoSig').classList.add('hidden');
+        vid.srcObject = localStream;
+        vid.muted = true;
+        vid.play().catch(function () {});
+
+        var vt = stream.getVideoTracks()[0];
+        if (vt) {
+          var s = vt.getSettings();
+          if (s.width) $('resolution').textContent = s.width + 'x' + s.height;
+        }
+
+        setLive(true, 'BROADCASTING');
+        log('camera OK. building offer...', 'ok');
+
+        // Build peer connection and offer
+        buildPc();
+
+        // Add local tracks
         localStream.getTracks().forEach(function (t) { pc.addTrack(t, localStream); });
 
+        // Gather all ICE before creating offer (trickle-less for copy-paste)
+        var candidates = [];
+        pc.onicecandidate = function (e) {
+          if (e.candidate) {
+            candidates.push(e.candidate);
+          } else {
+            // All ICE gathered — serialize full offer with candidates
+            var offerObj = {
+              sdp: pc.localDescription,
+              candidates: candidates.map(function (c) { return c.toJSON(); })
+            };
+            var offerStr = btoa(JSON.stringify(offerObj));
+            $('offerOut').value = offerStr;
+            activateStep('step2');
+            log('offer ready — copy it and paste on PC', 'ok');
+          }
+        };
+
         pc.createOffer()
-          .then(function (offer) { return pc.setLocalDescription(offer); })
-          .then(function () {
-            return db.ref('rooms/' + k + '/offer').set({
-              type: pc.localDescription.type,
-              sdp:  pc.localDescription.sdp
-            });
+          .then(function (offer) {
+            return pc.setLocalDescription(offer);
           })
-          .then(function () { L('offer sent', 'ok'); })
-          .catch(function (e) { L('offer err: ' + e.message, 'err'); });
-      });
-    })
-    .catch(function (e) {
-      L('error: ' + e.message, 'err');
-      if (e.name === 'NotAllowedError') L('Settings > Camera > Allow', '');
-    });
-}
-
-// =============================================================================
-//  WATCH  (use on PC)
-// =============================================================================
-function watch() {
-  var k = document.getElementById('KEY').value.trim();
-  if (!k) { L('enter a room key first!', 'err'); return; }
-  if (!initFirebase()) return;
-  stop();
-
-  L('joining room "' + k + '"...');
-
-  navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-    .catch(function () { return new MediaStream(); })
-    .then(function (localAudio) {
-      pc = makePc(k, true);
-      localAudio.getTracks().forEach(function (t) { pc.addTrack(t, localAudio); });
-
-      db.ref('rooms/' + k + '/watcherReady').set(true)
-        .then(function () { L('waiting for broadcaster offer...', 'ok'); });
-
-      // Listen for broadcaster's offer
-      fbOn('rooms/' + k + '/offer', 'value', function (snap) {
-        var data = snap.val();
-        if (!data || !pc) return;
-        if (pc.signalingState !== 'stable') return;
-
-        L('offer received — answering...', 'ok');
-        pc.setRemoteDescription(new RTCSessionDescription(data))
-          .then(function () { return pc.createAnswer(); })
-          .then(function (answer) { return pc.setLocalDescription(answer); })
           .then(function () {
-            return db.ref('rooms/' + k + '/answer').set({
-              type: pc.localDescription.type,
-              sdp:  pc.localDescription.sdp
-            });
+            log('gathering ICE...', 'ok');
           })
-          .then(function () { L('answer sent', 'ok'); })
-          .catch(function (e) { L('answer err: ' + e.message, 'err'); });
+          .catch(function (e) {
+            log('offer error: ' + e.message, 'err');
+          });
+      })
+      .catch(function (e) {
+        log('camera denied: ' + e.message, 'err');
+        log('allow camera in browser settings', '');
       });
+  }
 
-      // Listen for broadcaster's ICE candidates
-      fbOn('rooms/' + k + '/broadcasterICE', 'child_added', function (snap) {
-        var c = snap.val();
-        if (!c || !pc) return;
-        pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {});
-      });
+  function applyAnswer() {
+    var raw = $('answerIn').value.trim();
+    if (!raw) { log('paste the answer first!', 'err'); return; }
+    if (!pc)  { log('start camera first!', 'err'); return; }
+
+    try {
+      var obj = JSON.parse(atob(raw));
+      pc.setRemoteDescription(new RTCSessionDescription(obj.sdp))
+        .then(function () {
+          log('remote description set', 'ok');
+          // Add candidates from PC
+          var adds = (obj.candidates || []).map(function (c) {
+            return pc.addIceCandidate(new RTCIceCandidate(c));
+          });
+          return Promise.all(adds);
+        })
+        .then(function () {
+          log('ICE candidates added — waiting for stream...', 'ok');
+          setLive(true, 'CONNECTING');
+        })
+        .catch(function (e) {
+          log('apply answer error: ' + e.message, 'err');
+        });
+    } catch (e) {
+      log('invalid answer text — did you copy it fully?', 'err');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  //  PC FLOW
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  function applyOffer() {
+    var raw = $('offerIn').value.trim();
+    if (!raw) { log('paste the offer first!', 'err'); return; }
+
+    try {
+      var obj = JSON.parse(atob(raw));
+      log('offer received — building answer...', 'ok');
+
+      buildPc();
+
+      // Gather ICE silently then produce answer
+      var candidates = [];
+      pc.onicecandidate = function (e) {
+        if (e.candidate) {
+          candidates.push(e.candidate);
+        } else {
+          // All ICE gathered
+          var answerObj = {
+            sdp: pc.localDescription,
+            candidates: candidates.map(function (c) { return c.toJSON(); })
+          };
+          var answerStr = btoa(JSON.stringify(answerObj));
+          $('answerOut').value = answerStr;
+          activateStep('pcStep2');
+          log('answer ready — copy it and paste on phone', 'ok');
+        }
+      };
+
+      pc.setRemoteDescription(new RTCSessionDescription(obj.sdp))
+        .then(function () {
+          var adds = (obj.candidates || []).map(function (c) {
+            return pc.addIceCandidate(new RTCIceCandidate(c));
+          });
+          return Promise.all(adds);
+        })
+        .then(function () { return pc.createAnswer(); })
+        .then(function (answer) {
+          return pc.setLocalDescription(answer);
+        })
+        .then(function () {
+          log('gathering ICE...', 'ok');
+        })
+        .catch(function (e) {
+          log('process offer error: ' + e.message, 'err');
+        });
+    } catch (e) {
+      log('invalid offer text — did you copy it fully?', 'err');
+    }
+  }
+
+  // ── Copy helpers ─────────────────────────────────────────────────────────────
+  function copyText(textareaId, btnId) {
+    var val = $(textareaId).value;
+    if (!val) { log('nothing to copy yet', 'err'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).then(function () {
+        log('copied to clipboard!', 'ok');
+        var btn = $(btnId);
+        var orig = btn.textContent;
+        btn.textContent = '✓ COPIED!';
+        setTimeout(function () { btn.textContent = orig; }, 2000);
+      }).catch(function () { fallbackCopy(textareaId); });
+    } else {
+      fallbackCopy(textareaId);
+    }
+  }
+
+  function fallbackCopy(textareaId) {
+    var ta = $(textareaId);
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    try {
+      document.execCommand('copy');
+      log('copied (fallback)', 'ok');
+    } catch (e) {
+      log('copy failed — select text manually', 'err');
+    }
+  }
+
+  // ── Manual play button ────────────────────────────────────────────────────────
+  $('btnPlay').addEventListener('click', function () {
+    if (!remoteStream) { log('no stream yet', 'err'); return; }
+    var old = $('videoEl');
+    var nv  = document.createElement('video');
+    nv.id = 'videoEl'; nv.autoplay = true; nv.muted = true; nv.playsInline = true;
+    nv.setAttribute('playsinline', '');
+    nv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
+    nv.srcObject = remoteStream;
+    old.parentNode.replaceChild(nv, old);
+    nv.play().then(function () {
+      $('overlayPlay').classList.add('hidden');
+      $('overlayNoSig').classList.add('hidden');
+      setLive(true, 'WATCHING');
+      log('playing!', 'ok');
+    }).catch(function (e) { log('play err: ' + e.message, 'err'); });
+  });
+
+  // ── Fullscreen ────────────────────────────────────────────────────────────────
+  $('btnFs').addEventListener('click', function () {
+    var box = $('vbox');
+    if (!document.fullscreenElement) {
+      (box.requestFullscreen || box.webkitRequestFullscreen).call(box);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  });
+
+  // ── Role switching ────────────────────────────────────────────────────────────
+  function setRole(role) {
+    if (role === 'phone') {
+      $('rolePhone').className  = 'role-btn active';
+      $('rolePC').className     = 'role-btn';
+      $('phoneFlow').classList.remove('hidden');
+      $('pcFlow').classList.add('hidden');
+      $('statRole').textContent = 'PHONE';
+      activateStep('step1');
+      log('role: PHONE (broadcaster)', 'ok');
+    } else {
+      $('rolePhone').className  = 'role-btn';
+      $('rolePC').className     = 'role-btn active';
+      $('phoneFlow').classList.add('hidden');
+      $('pcFlow').classList.remove('hidden');
+      $('statRole').textContent = 'PC';
+      activateStep('pcStep1');
+      log('role: PC (viewer)', 'ok');
+    }
+  }
+
+  // ── Wire buttons ──────────────────────────────────────────────────────────────
+  var ACTIONS = {
+    'rolePhone':      function () { setRole('phone'); },
+    'rolePC':         function () { setRole('pc'); },
+    'btnBackCam':     function () { startCamera('environment'); },
+    'btnFrontCam':    function () { startCamera('user'); },
+    'btnCopyOffer':   function () { copyText('offerOut', 'btnCopyOffer'); },
+    'btnApplyAnswer': function () { applyAnswer(); activateStep('step3'); },
+    'btnApplyOffer':  function () { applyOffer(); },
+    'btnCopyAnswer':  function () { copyText('answerOut', 'btnCopyAnswer'); }
+  };
+
+  Object.keys(ACTIONS).forEach(function (id) {
+    var btn = $(id);
+    if (!btn) { log('WARN: #' + id + ' not in DOM', 'err'); return; }
+    var fn = ACTIONS[id];
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
     });
-}
-
-// ── Fullscreen ────────────────────────────────────────────────────────────────
-document.getElementById('b-fs').addEventListener('click', function () {
-  var el = document.getElementById('VBOX');
-  if (!document.fullscreenElement) {
-    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-  } else {
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  }
-});
-
-// ── Wire all buttons ──────────────────────────────────────────────────────────
-var BUTTONS = {
-  't-bcast': function () { setMode('b'); },
-  't-watch':  function () { setMode('w'); },
-  'b-back':   function () { broadcast('environment'); },
-  'b-front':  function () { broadcast('user'); },
-  'b-stopb':  function () { stop(); },
-  'b-conn':   function () { watch(); },
-  'b-stopw':  function () { stop(); }
-};
-
-Object.keys(BUTTONS).forEach(function (id) {
-  var el = document.getElementById(id);
-  if (!el) { console.warn('Button not found: #' + id); return; }
-  var fn = BUTTONS[id];
-  el.addEventListener('click', function (e) {
-    e.stopPropagation();
-    fn();
+    btn.addEventListener('touchend', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    });
   });
-  el.addEventListener('touchend', function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    fn();
-  });
-});
 
-// ── Typewriter ────────────────────────────────────────────────────────────────
-var PHRASES = ['FIREBASE_SIGNALING', 'WEBRTC_DIRECT', 'SECURE_CHANNEL', 'CAM_BRIDGE'];
-var pIdx = 0, cIdx = 0, deleting = false;
+  // ── Typewriter ────────────────────────────────────────────────────────────────
+  var TW = ['MANUAL_SIGNALING', 'NO_SERVER_NEEDED', 'COPY_PASTE_WEBRTC', 'SARA_V10'];
+  var twi = 0, twc = 0, twd = false;
 
-function typewriter() {
-  var el = document.getElementById('tw');
-  if (!el) return;
-  var cur = PHRASES[pIdx];
-  if (!deleting) {
-    el.textContent = cur.slice(0, ++cIdx);
-    if (cIdx === cur.length) { deleting = true; setTimeout(typewriter, 2000); return; }
-  } else {
-    el.textContent = cur.slice(0, --cIdx);
-    if (cIdx === 0) { deleting = false; pIdx = (pIdx + 1) % PHRASES.length; }
+  function typewriter() {
+    var el = $('tw');
+    if (!el) return;
+    var s = TW[twi];
+    if (!twd) {
+      el.textContent = s.slice(0, ++twc);
+      if (twc === s.length) { twd = true; setTimeout(typewriter, 2200); return; }
+    } else {
+      el.textContent = s.slice(0, --twc);
+      if (twc === 0) { twd = false; twi = (twi + 1) % TW.length; }
+    }
+    setTimeout(typewriter, twd ? 38 : 76);
   }
-  setTimeout(typewriter, deleting ? 40 : 80);
-}
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-[
-  { m: 'SARA v8.0 ready',              t: 'ok'  },
-  { m: 'buttons wired OK',             t: 'ok'  },
-  { m: 'Firebase compat SDK loaded',   t: 'ok'  },
-  { m: 'paste firebaseConfig to begin',t: 'err' }
-].forEach(function (line, i) {
-  setTimeout(function () { L(line.m, line.t); }, i * 200);
-});
+  // ── Boot ──────────────────────────────────────────────────────────────────────
+  var BOOT = [
+    { m: 'SARA v10.0 — copy-paste signaling', t: 'ok'  },
+    { m: 'no server, no Firebase needed',     t: 'ok'  },
+    { m: Object.keys(ACTIONS).length + ' buttons wired', t: 'ok' },
+    { m: 'select PHONE or PC role to begin',  t: 'def' }
+  ];
 
-typewriter();
+  BOOT.forEach(function (b, i) {
+    setTimeout(function () { log(b.m, b.t); }, i * 180);
+  });
+
+  typewriter();
+
+})(); // end IIFE — all functions are scoped, no global pollution
