@@ -18,8 +18,9 @@ html, body {
 }
 
 /* scanlines */
+/* scanlines — UI only, not over video */
 .scanlines {
-  pointer-events:none; position:fixed; inset:0; z-index:9999;
+  pointer-events:none; position:fixed; inset:0; z-index:50;
   background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(0,0,0,.09) 2px,rgba(0,0,0,.09) 4px);
 }
 
@@ -127,6 +128,8 @@ html, body {
 .vbox {
   position:relative; background:#000;
   border:1px solid var(--bdr); overflow:hidden; min-height:440px;
+  isolation: isolate;  /* creates new stacking context — blocks scanlines overlay */
+  z-index: 100;        /* above the scanlines z-index:50 */
 }
 .corner { position:absolute; width:16px; height:16px; z-index:5; pointer-events:none; }
 .tl { top:8px;    left:8px;   border-top:2px solid var(--g); border-left:2px solid var(--g); }
