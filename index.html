@@ -13,83 +13,67 @@
 
 <div class="wrap">
 
+  <!-- HEADER -->
   <header class="hdr">
-    <div class="hdr-side">SYS://RVU &gt; <span id="tw"></span></div>
-    <div class="hdr-mid">
+    <span class="hdr-l">SYS://RVU &gt; <span id="tw"></span></span>
+    <div class="hdr-c">
       <div class="logo">S.A.R.A</div>
       <div class="logo-sub">Secure Adaptive Remote Access</div>
     </div>
-    <div class="hdr-side">SARANSH_K // 1RVU22BSC090</div>
+    <span class="hdr-r">SARANSH_K // 1RVU22BSC090</span>
   </header>
 
-  <div class="main-grid">
+  <!-- GRID -->
+  <div class="grid">
 
-    <!-- ═══ LEFT PANEL ═══ -->
+    <!-- LEFT PANEL -->
     <aside class="panel">
 
-      <div class="ptitle">[ DEVICE ROLE ]</div>
-      <div class="role-btns">
-        <button id="rolePhone" class="role-btn active">&#128247; PHONE</button>
-        <button id="rolePC"    class="role-btn">&#128187; PC / VIEWER</button>
+      <div class="section-title">[ STREAM CONTROL ]</div>
+
+      <!-- MODE TABS -->
+      <div class="tabs">
+        <button id="tabBroadcast" class="tab tab-on">&#9658; BROADCAST</button>
+        <button id="tabWatch"     class="tab">&#9673; RECEIVE</button>
       </div>
 
-      <!-- ─── PHONE FLOW ─── -->
-      <div id="phoneFlow">
-
-        <div class="step-box" id="step1">
-          <div class="step-label">STEP 1 — Start Camera</div>
-          <div class="step-btns">
-            <button class="btn green" id="btnBackCam">&#9654; BACK CAM</button>
-            <button class="btn dim"   id="btnFrontCam">&#9654; FRONT CAM</button>
-          </div>
+      <!-- ROOM KEY -->
+      <div class="field">
+        <div class="field-label">// ROOM KEY</div>
+        <div class="field-input">
+          <span class="field-pre">$_</span>
+          <input id="roomKey" class="inp" type="text" placeholder="e.g. sara123" autocomplete="off" spellcheck="false"/>
         </div>
-
-        <div class="step-box dimmed" id="step2">
-          <div class="step-label">STEP 2 — Copy this OFFER, paste it on PC</div>
-          <textarea id="offerOut" class="sdp-box" readonly placeholder="offer will appear here..."></textarea>
-          <button class="btn green" id="btnCopyOffer">&#9112; COPY OFFER</button>
-        </div>
-
-        <div class="step-box dimmed" id="step3">
-          <div class="step-label">STEP 3 — Paste ANSWER from PC</div>
-          <textarea id="answerIn" class="sdp-box" placeholder="paste answer from PC here..."></textarea>
-          <button class="btn green" id="btnApplyAnswer">&#9654; APPLY ANSWER</button>
-        </div>
-
       </div>
 
-      <!-- ─── PC FLOW ─── -->
-      <div id="pcFlow" class="hidden">
+      <!-- BROADCAST PANEL -->
+      <div id="panelBroadcast" class="btn-group">
+        <button id="btnBackCam"  class="btn btn-green">&#9654; BACK CAMERA</button>
+        <button id="btnFrontCam" class="btn btn-dim">&#9654; FRONT CAMERA</button>
+        <button id="btnStopB"    class="btn btn-red">&#9632; TERMINATE</button>
+      </div>
 
-        <div class="step-box" id="pcStep1">
-          <div class="step-label">STEP 1 — Paste OFFER from phone</div>
-          <textarea id="offerIn" class="sdp-box" placeholder="paste offer from phone here..."></textarea>
-          <button class="btn green" id="btnApplyOffer">&#9654; PROCESS OFFER</button>
-        </div>
-
-        <div class="step-box dimmed" id="pcStep2">
-          <div class="step-label">STEP 2 — Copy this ANSWER, paste it on phone</div>
-          <textarea id="answerOut" class="sdp-box" readonly placeholder="answer will appear here..."></textarea>
-          <button class="btn green" id="btnCopyAnswer">&#9112; COPY ANSWER</button>
-        </div>
-
+      <!-- WATCH PANEL -->
+      <div id="panelWatch" class="btn-group" style="display:none">
+        <button id="btnConnect" class="btn btn-green">&#9654; CONNECT FEED</button>
+        <button id="btnStopW"   class="btn btn-red">&#9632; DISCONNECT</button>
       </div>
 
       <div class="divider"></div>
-      <div class="ptitle">[ SYS LOG ]</div>
-      <div class="log" id="log"></div>
+      <div class="section-title">[ SYS LOG ]</div>
+      <div id="logBox" class="log"></div>
 
       <div class="divider"></div>
       <div class="stats">
-        <div class="stat"><div class="sl">STATUS</div><div class="sv" id="statStatus">OFFLINE</div></div>
-        <div class="stat"><div class="sl">ROLE</div>  <div class="sv" id="statRole">PHONE</div></div>
-        <div class="stat"><div class="sl">UPTIME</div><div class="sv" id="statUptime">00:00:00</div></div>
-        <div class="stat"><div class="sl">ICE</div>   <div class="sv" id="statIce">--</div></div>
+        <div class="stat"><div class="stat-l">STATUS</div><div class="stat-v" id="stStatus">OFFLINE</div></div>
+        <div class="stat"><div class="stat-l">MODE</div>  <div class="stat-v" id="stMode">BROADCAST</div></div>
+        <div class="stat"><div class="stat-l">UPTIME</div><div class="stat-v" id="stUptime">00:00:00</div></div>
+        <div class="stat"><div class="stat-l">SIGNAL</div><div class="stat-v" id="stSignal">--</div></div>
       </div>
 
     </aside>
 
-    <!-- ═══ VIDEO PANEL ═══ -->
+    <!-- VIDEO PANEL -->
     <section class="vsec">
 
       <div class="vbox" id="vbox">
@@ -100,39 +84,38 @@
 
         <video id="videoEl" autoplay muted playsinline></video>
 
-        <div id="overlayNoSig" class="overlay">
+        <div id="ovNoSig" class="ov">
           <div class="glitch">NO_SIGNAL</div>
-          <div class="sub-txt">AWAITING STREAM</div>
+          <div class="ov-sub">AWAITING STREAM</div>
         </div>
 
-        <div id="overlayPlay" class="overlay dark hidden">
+        <div id="ovPlay" class="ov ov-dark" style="display:none">
           <button id="btnPlay" class="play-btn">&#9654; CLICK TO PLAY</button>
-          <div class="sub-txt">tap to start stream</div>
+          <div class="ov-sub">tap once to start</div>
         </div>
 
-        <div class="hud-top">
-          <div class="pill">
-            <div class="dot" id="liveDot"></div>
-            <span id="liveLabel">OFFLINE</span>
-          </div>
+        <div class="hud-t">
+          <div class="pill"><div id="dot" class="dot"></div><span id="liveLabel">OFFLINE</span></div>
           <div id="clock" class="clock">00:00:00</div>
           <button id="btnFs" class="fs-btn">[ FS ]</button>
         </div>
 
-        <div class="hud-bot">
+        <div class="hud-b">
           <span class="tag">CAM_FEED_01</span>
-          <span class="tag" id="resolution">-- x --</span>
+          <span class="tag" id="res">-- x --</span>
           <span class="tag">RVU // CS</span>
         </div>
       </div>
 
       <details class="howto">
-        <summary>&#9658; HOW TO USE (no server needed!)</summary>
+        <summary>&#9658; HOW TO USE</summary>
         <div class="how-body">
-          <p><span class="gc">PHONE:</span> Select PHONE role &rarr; tap camera &rarr; copy the OFFER text.</p>
-          <p><span class="gc">PC:</span> Select PC role &rarr; paste the OFFER &rarr; click PROCESS OFFER &rarr; copy the ANSWER text.</p>
-          <p><span class="gc">PHONE:</span> Paste the ANSWER &rarr; click APPLY ANSWER &rarr; stream starts!</p>
-          <p><span class="gc">NOTE:</span> Transfer the text via WhatsApp, iMessage, email — anything works!</p>
+          <p><span class="gc">01.</span> Create free Firebase project at <strong>console.firebase.google.com</strong></p>
+          <p><span class="gc">02.</span> Build &rarr; Realtime Database &rarr; Create database &rarr; <strong>Test mode</strong></p>
+          <p><span class="gc">03.</span> Project Settings &rarr; Add Web App &rarr; copy <strong>firebaseConfig</strong></p>
+          <p><span class="gc">04.</span> Paste config into <strong>main.js</strong> at the top</p>
+          <p><span class="gc">05.</span> Phone: BROADCAST &rarr; enter room key &rarr; tap camera button</p>
+          <p><span class="gc">06.</span> PC: RECEIVE &rarr; same room key &rarr; CONNECT FEED</p>
         </div>
       </details>
 
@@ -140,12 +123,14 @@
 
   </div>
 
-  <footer class="footer">
-    2024 &nbsp;SARANSH KUMAR &nbsp;// &nbsp;RV UNIVERSITY &nbsp;// &nbsp;COMPUTER SCIENCE
-  </footer>
+  <footer class="footer">2024 &nbsp; SARANSH KUMAR &nbsp;//&nbsp; RV UNIVERSITY &nbsp;//&nbsp; COMPUTER SCIENCE</footer>
 
 </div>
 
+<!-- Firebase Compat v9 — must load BEFORE main.js -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="main.js"></script>
+
 </body>
 </html>
