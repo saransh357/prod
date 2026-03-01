@@ -1,341 +1,418 @@
-// ── config ────────────────────────────────────────────────────────────────────
-var PC = {
-  debug: 0,
-  config: {
-    iceServers: [
-      {urls:'stun:stun.l.google.com:19302'},
-      {urls:'stun:stun1.l.google.com:19302'},
-      {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],
-       username:'openrelayproject',credential:'openrelayproject'}
-    ]
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// SARA v6.0 — Firebase Signaling + Raw WebRTC (no PeerJS)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// SETUP (one time):
+//  1. Go to https://console.firebase.google.com
+//  2. Create a project (free)
+//  3. Add a Web App → copy the firebaseConfig below
+//  4. Go to Build → Realtime Database → Create database → Start in TEST MODE
+//  5. Deploy these files to GitHub Pages
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { initializeApp }         from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, onValue, remove, push, onChildAdded }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+// ─── PASTE YOUR FIREBASE CONFIG HERE ─────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "PASTE_YOUR_API_KEY",
+  authDomain:        "PASTE_YOUR_AUTH_DOMAIN",
+  databaseURL:       "PASTE_YOUR_DATABASE_URL",
+  projectId:         "PASTE_YOUR_PROJECT_ID",
+  storageBucket:     "PASTE_YOUR_STORAGE_BUCKET",
+  messagingSenderId: "PASTE_YOUR_SENDER_ID",
+  appId:             "PASTE_YOUR_APP_ID"
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: ['turn:openrelay.metered.ca:80',
+             'turn:openrelay.metered.ca:443',
+             'turn:openrelay.metered.ca:443?transport=tcp'],
+      username: 'openrelayproject',
+      credential: 'openrelayproject' }
+  ]
 };
 
 // ── state ─────────────────────────────────────────────────────────────────────
-var peer=null,remoteStream=null,activeCall=null,retries=0,retryT=null,upT=null,t0=null;
+let app, db;
+let pc       = null;   // RTCPeerConnection
+let localStream = null;
+let remoteStream = null;
+let upT      = null;
+let t0       = null;
+let unsubOffer = null;
+let unsubAnswer = null;
+let unsubICE = null;
 
-// ── log ───────────────────────────────────────────────────────────────────────
-function L(msg,t){
-  var el=document.getElementById('LOG');
-  var d=document.createElement('div');
-  d.className='ll';
-  d.innerHTML='<span class="lp">$</span><span class="l'+(t||'def')+'"> '+msg+'</span>';
-  el.appendChild(d);
-  while(el.children.length>60)el.removeChild(el.firstChild);
-  el.scrollTop=el.scrollHeight;
-}
-
-// ── clock / uptime ────────────────────────────────────────────────────────────
-function pad(n){return String(n).padStart(2,'0');}
-setInterval(function(){
-  var n=new Date();
-  document.getElementById('CLK').textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
-},1000);
-function startUp(){
-  stopUp(); t0=Date.now();
-  upT=setInterval(function(){
-    var e=Math.floor((Date.now()-t0)/1000);
-    document.getElementById('su').textContent=pad(Math.floor(e/3600))+':'+pad(Math.floor(e%3600/60))+':'+pad(e%60);
-  },1000);
-}
-function stopUp(){clearInterval(upT);document.getElementById('su').textContent='00:00:00';t0=null;}
-
-// ── status ────────────────────────────────────────────────────────────────────
-function setLive(on,lbl){
-  document.getElementById('DOT').className='dot'+(on?' live':'');
-  document.getElementById('LL').textContent=on?(lbl||'LIVE'):'OFFLINE';
-  var ss=document.getElementById('ss');
-  ss.textContent=on?(lbl||'LIVE'):'OFFLINE';
-  ss.style.color=on?'var(--g)':'var(--r)';
-  document.getElementById('sg').textContent=on?'STRONG':'--';
-  on?startUp():stopUp();
-}
-
-// ── mode ──────────────────────────────────────────────────────────────────────
-function setMode(m){
-  var isBcast=m==='b';
-  document.getElementById('t-bcast').className='tab'+(isBcast?' on':'');
-  document.getElementById('t-watch').className='tab'+(!isBcast?' on':'');
-  document.getElementById('p-bcast').style.display=isBcast?'flex':'none';
-  document.getElementById('p-watch').style.display=isBcast?'none':'flex';
-  document.getElementById('sm').textContent=isBcast?'BROADCAST':'WATCH';
-  L('mode: '+(isBcast?'BROADCAST':'WATCH'));
-}
-
-// ── THE video attach function ─────────────────────────────────────────────────
-function attachToVideo(stream){
-  remoteStream=stream;
-
-  L('got tracks: '+stream.getTracks().map(function(t){return t.kind+'('+t.readyState+')'}).join(', '),'ok');
-
-  var V  = document.getElementById('V');
-  var NS = document.getElementById('NS');
-  var PO = document.getElementById('PO');
-
-  // Hide no-signal
-  NS.style.display='none';
-
-  // Assign stream to video
-  V.srcObject = stream;
-  V.muted     = true;
-
-  L('srcObject set. calling play()...');
-
-  var p = V.play();
-  if(p && p.then){
-    p.then(function(){
-      L('play() SUCCESS — stream is live!','ok');
-      PO.style.display='none';
-      setLive(true,'WATCHING');
-    }).catch(function(err){
-      L('play() blocked: '+err.name,'err');
-      L('showing CLICK TO PLAY button...','ok');
-      PO.style.display='flex';
-      setLive(true,'PAUSED');
-    });
-  } else {
-    L('play() called (no promise)','ok');
-    PO.style.display='none';
-    setLive(true,'WATCHING');
+// ── init firebase ─────────────────────────────────────────────────────────────
+function initFirebase() {
+  if (firebaseConfig.apiKey === 'PASTE_YOUR_API_KEY') {
+    L('Firebase not configured!', 'err');
+    L('Open main.js and paste your firebaseConfig', 'err');
+    return false;
+  }
+  try {
+    app = initializeApp(firebaseConfig);
+    db  = getDatabase(app);
+    L('Firebase connected', 'ok');
+    return true;
+  } catch(e) {
+    L('Firebase init failed: ' + e.message, 'err');
+    return false;
   }
 }
 
-// ── manual play button ────────────────────────────────────────────────────────
-document.getElementById('b-play').onclick = function(){
-  if(!remoteStream){ L('no stream','err'); return; }
-  L('manual play clicked...','ok');
-  var V  = document.getElementById('V');
-  var PO = document.getElementById('PO');
-  var NS = document.getElementById('NS');
+// ── log ───────────────────────────────────────────────────────────────────────
+function L(msg, t) {
+  const el = document.getElementById('LOG');
+  const d  = document.createElement('div');
+  d.className = 'll';
+  d.innerHTML = '<span class="lp">$</span><span class="l'+(t||'def')+'"> '+msg+'</span>';
+  el.appendChild(d);
+  while (el.children.length > 60) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
 
-  // Re-create video element completely (nuclear option)
-  var parent = V.parentNode;
-  var newV   = document.createElement('video');
-  newV.id          = 'V';
-  newV.autoplay    = true;
-  newV.muted       = true;
-  newV.playsInline = true;
-  newV.setAttribute('playsinline','');
-  newV.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
-  newV.srcObject = remoteStream;
-  parent.replaceChild(newV, V);
+// ── clock / uptime ────────────────────────────────────────────────────────────
+const pad = n => String(n).padStart(2,'0');
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('CLK').textContent =
+    pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+}, 1000);
 
-  newV.play().then(function(){
-    L('manual play OK!','ok');
-    PO.style.display='none';
-    NS.style.display='none';
-    setLive(true,'WATCHING');
-  }).catch(function(e){
-    L('still blocked: '+e.name+' — try clicking again','err');
-  });
+function startUp() {
+  stopUp(); t0 = Date.now();
+  upT = setInterval(() => {
+    const e = Math.floor((Date.now()-t0)/1000);
+    document.getElementById('su').textContent =
+      pad(Math.floor(e/3600))+':'+pad(Math.floor(e%3600/60))+':'+pad(e%60);
+  }, 1000);
+}
+function stopUp() { clearInterval(upT); document.getElementById('su').textContent='00:00:00'; t0=null; }
+
+// ── status ────────────────────────────────────────────────────────────────────
+function setLive(on, lbl) {
+  document.getElementById('DOT').className = 'dot'+(on?' live':'');
+  document.getElementById('LL').textContent = on ? (lbl||'LIVE') : 'OFFLINE';
+  const ss = document.getElementById('ss');
+  ss.textContent  = on ? (lbl||'LIVE') : 'OFFLINE';
+  ss.style.color  = on ? 'var(--g)' : 'var(--r)';
+  document.getElementById('sg').textContent = on ? 'STRONG' : '--';
+  on ? startUp() : stopUp();
+}
+
+// ── mode ──────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  const isB = m === 'b';
+  document.getElementById('t-bcast').className = 'tab'+(isB?' on':'');
+  document.getElementById('t-watch').className = 'tab'+(!isB?' on':'');
+  document.getElementById('p-bcast').style.display = isB ? 'flex' : 'none';
+  document.getElementById('p-watch').style.display = isB ? 'none' : 'flex';
+  document.getElementById('sm').textContent = isB ? 'BROADCAST' : 'WATCH';
+  L('mode: '+(isB?'BROADCAST':'WATCH'));
+}
+
+// ── attach remote stream to video ─────────────────────────────────────────────
+function showStream(stream) {
+  remoteStream = stream;
+  L('tracks: '+stream.getTracks().map(t=>t.kind+'('+t.readyState+')').join(', '),'ok');
+
+  const V  = document.getElementById('V');
+  const NS = document.getElementById('NS');
+  const PO = document.getElementById('PO');
+
+  NS.style.display = 'none';
+  V.srcObject = stream;
+  V.muted = true;
+
+  const p = V.play();
+  if (p && p.then) {
+    p.then(() => {
+      L('▶ LIVE!', 'ok');
+      PO.style.display = 'none';
+      setLive(true, 'WATCHING');
+    }).catch(err => {
+      L('autoplay blocked — click CLICK TO PLAY', 'err');
+      PO.style.display = 'flex';
+      setLive(true, 'PAUSED');
+    });
+  } else {
+    PO.style.display = 'none';
+    setLive(true, 'WATCHING');
+  }
+}
+
+// ── manual play ───────────────────────────────────────────────────────────────
+document.getElementById('b-play').onclick = () => {
+  if (!remoteStream) { L('no stream yet','err'); return; }
+  const V  = document.getElementById('V');
+  const PO = document.getElementById('PO');
+  const NS = document.getElementById('NS');
+  // Replace video element to force render
+  const nv = document.createElement('video');
+  nv.id='V'; nv.autoplay=true; nv.muted=true; nv.playsInline=true;
+  nv.setAttribute('playsinline','');
+  nv.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
+  nv.srcObject = remoteStream;
+  V.parentNode.replaceChild(nv, V);
+  nv.play().then(() => {
+    PO.style.display='none'; NS.style.display='none';
+    setLive(true,'WATCHING'); L('manual play OK','ok');
+  }).catch(e => L('play err: '+e.message,'err'));
 };
 
-// ── stop ──────────────────────────────────────────────────────────────────────
-function stop(){
-  clearTimeout(retryT); retries=0;
-  if(remoteStream){remoteStream.getTracks().forEach(function(t){t.stop();});remoteStream=null;}
-  if(activeCall){try{activeCall.close();}catch(e){} activeCall=null;}
-  if(peer){try{peer.destroy();}catch(e){} peer=null;}
-  var V=document.getElementById('V');
-  if(V){V.srcObject=null;}
-  document.getElementById('NS').style.display='flex';
-  document.getElementById('PO').style.display='none';
+// ── cleanup signaling listeners ────────────────────────────────────────────────
+function cleanListeners() {
+  if (unsubOffer)  { unsubOffer();  unsubOffer=null; }
+  if (unsubAnswer) { unsubAnswer(); unsubAnswer=null; }
+  if (unsubICE)    { unsubICE();    unsubICE=null; }
+}
+
+// ── close peer connection ──────────────────────────────────────────────────────
+function closePc() {
+  if (pc) { try { pc.close(); } catch(e){} pc=null; }
+}
+
+// ── stop everything ───────────────────────────────────────────────────────────
+function stop() {
+  cleanListeners();
+  closePc();
+  if (localStream)  { localStream.getTracks().forEach(t=>t.stop());  localStream=null; }
+  if (remoteStream) { remoteStream.getTracks().forEach(t=>t.stop()); remoteStream=null; }
+  const V = document.getElementById('V');
+  if (V) V.srcObject = null;
+  document.getElementById('NS').style.display = 'flex';
+  document.getElementById('PO').style.display = 'none';
   setLive(false);
   L('stopped.','err');
+  // Clean Firebase room
+  const k = document.getElementById('KEY').value.trim();
+  if (db && k) remove(ref(db, 'rooms/'+k)).catch(()=>{});
 }
 
-// ── broadcast ─────────────────────────────────────────────────────────────────
-function broadcast(facing){
-  var k=document.getElementById('KEY').value.trim();
-  if(!k){L('enter auth key first!','err');return;}
-  stop();
-  L('requesting camera...');
-  navigator.mediaDevices.getUserMedia({video:{facingMode:facing},audio:true})
-  .then(function(s){
-    remoteStream=s;
-    var V=document.getElementById('V');
-    document.getElementById('NS').style.display='none';
-    V.srcObject=s; V.muted=true; V.play().catch(function(){});
-    var tr=s.getVideoTracks()[0];
-    if(tr){var st=tr.getSettings();if(st.width)document.getElementById('RES').textContent=st.width+'x'+st.height;}
-    setLive(true,'BROADCASTING');
-    L('camera OK. registering peer...','ok');
+// ── create RTCPeerConnection ───────────────────────────────────────────────────
+function makePc(roomKey, isCaller) {
+  const p = new RTCPeerConnection(ICE_SERVERS);
 
-    peer=new Peer(k,PC);
-    peer.on('open',function(id){
-      L('registered! key="'+id+'"','ok');
-      L('waiting for PC to connect...','ok');
+  // Send our ICE candidates to Firebase
+  p.onicecandidate = e => {
+    if (!e.candidate) return;
+    const path = isCaller
+      ? 'rooms/'+roomKey+'/watcherICE'
+      : 'rooms/'+roomKey+'/broadcasterICE';
+    push(ref(db, path), e.candidate.toJSON()).catch(()=>{});
+  };
+
+  p.oniceconnectionstatechange = () => {
+    L('ICE: '+p.iceConnectionState);
+    if (p.iceConnectionState === 'connected' || p.iceConnectionState === 'completed') {
+      L('ICE connected!', 'ok');
+    }
+    if (p.iceConnectionState === 'failed') {
+      L('ICE failed — check both devices on same network','err');
+    }
+  };
+
+  p.onconnectionstatechange = () => {
+    L('PC state: '+p.connectionState);
+  };
+
+  // Receive remote stream (watcher side)
+  p.ontrack = e => {
+    L('ontrack fired! streams: '+e.streams.length,'ok');
+    if (e.streams && e.streams[0]) {
+      showStream(e.streams[0]);
+    }
+  };
+
+  return p;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BROADCAST (phone side)
+// ─────────────────────────────────────────────────────────────────────────────
+async function broadcast(facing) {
+  const k = document.getElementById('KEY').value.trim();
+  if (!k) { L('enter room key first!','err'); return; }
+  if (!initFirebase()) return;
+  stop();
+
+  L('requesting camera...');
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: facing }, audio: true
     });
-    peer.on('call',function(c){
-      L('PC calling — answering...','ok');
-      activeCall=c;
-      c.answer(s);
-      setLive(true,'LIVE');
-      L('LIVE — streaming to PC','ok');
-      c.on('close',function(){setLive(true,'BROADCASTING');L('PC disconnected','err');});
-      c.on('error',function(e){L('call err:'+e.type,'err');});
-    });
-    peer.on('disconnected',function(){if(peer&&!peer.destroyed){peer.reconnect();L('relay reconnecting...','err');}});
-    peer.on('error',function(e){
-      if(e.type==='unavailable-id'){L('key in use — try another key','err');stop();}
-      else if(e.type==='network'||e.type==='socket-error'||e.type==='socket-closed'){L('network err — check connection','err');}
-      else L('peer err:'+e.type,'err');
-    });
-  }).catch(function(e){
+  } catch(e) {
     L('camera denied: '+e.message,'err');
     L('Settings > Browser > Camera > Allow','');
-  });
-}
+    return;
+  }
 
-// ── watch ────────────────────────────────────────────────────────────────────
-function watch(){
-  var k=document.getElementById('KEY').value.trim();
-  if(!k){L('enter auth key first!','err');return;}
-  clearTimeout(retryT);
-  stop();
-  retries=0;
-  doConnect(k);
-}
+  // Show own camera locally
+  const V = document.getElementById('V');
+  document.getElementById('NS').style.display = 'none';
+  V.srcObject = localStream; V.muted = true; V.play().catch(()=>{});
 
-function doConnect(k){
-  L('dialing... attempt '+(retries+1));
-  peer=new Peer(PC);
+  const tr = localStream.getVideoTracks()[0];
+  if (tr) {
+    const s = tr.getSettings();
+    if (s.width) document.getElementById('RES').textContent = s.width+'x'+s.height;
+  }
 
-  var openTimer=setTimeout(function(){
-    L('relay open timeout','err');
-    cleanup(); doRetry(k);
-  },12000);
+  setLive(true, 'BROADCASTING');
+  L('camera OK. cleaning old room...','ok');
 
-  peer.on('open',function(){
-    clearTimeout(openTimer);
-    L('relay open. calling phone...','ok');
+  // Clean any old signaling data
+  await remove(ref(db, 'rooms/'+k)).catch(()=>{});
 
-    // get mic stream for proper offer/answer (video:false so no camera popup)
-    var getAudio = navigator.mediaDevices
-      ? navigator.mediaDevices.getUserMedia({audio:true,video:false}).catch(function(){
-          return new MediaStream();
-        })
-      : Promise.resolve(new MediaStream());
+  L('waiting for watcher to join...','ok');
 
-    getAudio.then(function(localAudio){
-      var c;
-      try{ c=peer.call(k,localAudio); }
-      catch(e){ L('call() threw: '+e.message,'err'); cleanup(); doRetry(k); return; }
-
-      if(!c){ L('phone not found (null call)','err'); cleanup(); doRetry(k); return; }
-
-      activeCall=c;
-      L('ringing phone...','ok');
-      var gotStream=false;
-
-      var streamTimer=setTimeout(function(){
-        if(!gotStream){L('stream timeout — phone may not be ready','err');cleanup();doRetry(k);}
-      },20000);
-
-      // PRIMARY: PeerJS stream event
-      c.on('stream',function(remote){
-        if(gotStream)return;
-        gotStream=true;
-        clearTimeout(streamTimer);
-        retries=0;
-        L('STREAM RECEIVED via stream event!','ok');
-        attachToVideo(remote);
-      });
-
-      // FALLBACK: raw RTCPeerConnection ontrack
-      if(c.peerConnection){
-        c.peerConnection.ontrack=function(ev){
-          if(gotStream)return;
-          if(!ev.streams||!ev.streams[0])return;
-          gotStream=true;
-          clearTimeout(streamTimer);
-          retries=0;
-          L('STREAM RECEIVED via ontrack!','ok');
-          attachToVideo(ev.streams[0]);
-        };
-        c.peerConnection.oniceconnectionstatechange=function(){
-          var s=c.peerConnection.iceConnectionState;
-          L('ICE: '+s);
-          if(s==='failed'){
-            clearTimeout(streamTimer);
-            L('ICE failed — TURN server unreachable?','err');
-            cleanup(); doRetry(k);
-          }
-        };
-      }
-
-      c.on('close',function(){clearTimeout(streamTimer);setLive(false);L('phone disconnected','err');});
-      c.on('error',function(e){clearTimeout(streamTimer);L('call err: '+(e.message||e.type),'err');cleanup();doRetry(k);});
-    });
-  });
-
-  peer.on('error',function(e){
-    clearTimeout(openTimer);
-    L('peer err: '+e.type,'err');
-    if(e.type==='peer-unavailable') L('phone not found — is it broadcasting?','');
-    else if(e.type==='network'||e.type==='socket-error'||e.type==='socket-closed'){
-      L('WEBSOCKET BLOCKED','err');
-      L('Both devices must be on same hotspot','err');
-      L('University/office WiFi blocks WSS','err');
+  // Watch for an answer from the watcher
+  unsubAnswer = onValue(ref(db, 'rooms/'+k+'/answer'), async snap => {
+    const data = snap.val();
+    if (!data || !pc) return;
+    if (pc.signalingState === 'have-local-offer') {
+      L('answer received — setting remote description','ok');
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        L('remote desc set OK','ok');
+      } catch(e) { L('setRemoteDesc err: '+e.message,'err'); }
     }
-    cleanup(); doRetry(k);
   });
-  peer.on('disconnected',function(){clearTimeout(openTimer);cleanup();doRetry(k);});
+
+  // Watch for ICE candidates from watcher
+  unsubICE = onChildAdded(ref(db, 'rooms/'+k+'/watcherICE'), async snap => {
+    const c = snap.val();
+    if (!c || !pc) return;
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    } catch(e) { L('addICE err: '+e.message,'err'); }
+  });
+
+  // Watch for watcher joining (they write their presence)
+  unsubOffer = onValue(ref(db, 'rooms/'+k+'/watcherReady'), async snap => {
+    if (!snap.val()) return;
+    L('watcher joined! creating offer...','ok');
+    setLive(true, 'LIVE');
+
+    closePc();
+    pc = makePc(k, false); // broadcaster = not caller
+
+    // Add local tracks
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+    // Create offer
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await set(ref(db, 'rooms/'+k+'/offer'), { type: offer.type, sdp: offer.sdp });
+      L('offer sent','ok');
+    } catch(e) { L('offer err: '+e.message,'err'); }
+  });
 }
 
-function cleanup(){
-  if(activeCall){try{activeCall.close();}catch(e){} activeCall=null;}
-  if(peer){try{peer.destroy();}catch(e){} peer=null;}
-}
-function doRetry(k){
-  if(retries>=5){L('max retries. tap CONNECT FEED again.','err');retries=0;return;}
-  retries++;
-  var delay=Math.min(retries*2000,8000);
-  L('retry '+retries+'/5 in '+delay/1000+'s...');
-  retryT=setTimeout(function(){doConnect(k);},delay);
+// ─────────────────────────────────────────────────────────────────────────────
+// WATCH (PC side)
+// ─────────────────────────────────────────────────────────────────────────────
+async function watch() {
+  const k = document.getElementById('KEY').value.trim();
+  if (!k) { L('enter room key first!','err'); return; }
+  if (!initFirebase()) return;
+  stop();
+
+  L('connecting to room "'+k+'"...');
+
+  // Get a local audio stream for proper WebRTC negotiation
+  let localAudio;
+  try {
+    localAudio = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
+  } catch(e) {
+    localAudio = new MediaStream();
+    L('no mic — using empty stream','');
+  }
+
+  pc = makePc(k, true); // watcher = caller
+
+  // Add local audio (needed for proper offer/answer)
+  localAudio.getTracks().forEach(t => pc.addTrack(t, localAudio));
+
+  // Tell broadcaster we're ready
+  await set(ref(db, 'rooms/'+k+'/watcherReady'), true);
+  L('joined room. waiting for offer...','ok');
+
+  // Listen for offer from broadcaster
+  unsubOffer = onValue(ref(db, 'rooms/'+k+'/offer'), async snap => {
+    const data = snap.val();
+    if (!data || !pc) return;
+    if (pc.signalingState !== 'stable') return;
+
+    L('offer received — creating answer...','ok');
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(data));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await set(ref(db, 'rooms/'+k+'/answer'), { type: answer.type, sdp: answer.sdp });
+      L('answer sent','ok');
+    } catch(e) { L('answer err: '+e.message,'err'); }
+  });
+
+  // Listen for ICE candidates from broadcaster
+  unsubICE = onChildAdded(ref(db, 'rooms/'+k+'/broadcasterICE'), async snap => {
+    const c = snap.val();
+    if (!c || !pc) return;
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    } catch(e) { L('addICE err: '+e.message,'err'); }
+  });
 }
 
 // ── fullscreen ────────────────────────────────────────────────────────────────
-document.getElementById('b-fs').onclick=function(){
-  var el=document.getElementById('VBOX');
-  if(!document.fullscreenElement)(el.requestFullscreen||el.webkitRequestFullscreen).call(el);
+document.getElementById('b-fs').onclick = () => {
+  const el = document.getElementById('VBOX');
+  if (!document.fullscreenElement) (el.requestFullscreen||el.webkitRequestFullscreen).call(el);
   else (document.exitFullscreen||document.webkitExitFullscreen).call(document);
 };
 
 // ── wire buttons ──────────────────────────────────────────────────────────────
-var BTNS={
-  't-bcast':function(){setMode('b');},
-  't-watch':function(){setMode('w');},
-  'b-back':function(){broadcast('environment');},
-  'b-front':function(){broadcast('user');},
-  'b-stopb':function(){stop();},
-  'b-conn':function(){watch();},
-  'b-stopw':function(){stop();}
+const BTNS = {
+  't-bcast': () => setMode('b'),
+  't-watch':  () => setMode('w'),
+  'b-back':   () => broadcast('environment'),
+  'b-front':  () => broadcast('user'),
+  'b-stopb':  () => stop(),
+  'b-conn':   () => watch(),
+  'b-stopw':  () => stop()
 };
-Object.keys(BTNS).forEach(function(id){
-  var el=document.getElementById(id);
-  if(!el){L('WARN: #'+id+' not found','err');return;}
-  var fn=BTNS[id];
-  el.addEventListener('click',function(e){e.stopPropagation();fn();});
-  el.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();fn();});
+Object.entries(BTNS).forEach(([id,fn]) => {
+  const el = document.getElementById(id);
+  if (!el) { L('WARN: #'+id+' not found','err'); return; }
+  el.addEventListener('click',    e => { e.stopPropagation(); fn(); });
+  el.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); fn(); });
 });
 
 // ── typewriter ────────────────────────────────────────────────────────────────
-var PH=['STREAMING_UTILITY','SECURE_CHANNEL','CAM_BRIDGE','PEER_LINK'],pi=0,ci=0,del=false;
-function tw(){
-  var el=document.getElementById('tw');if(!el)return;
-  var c=PH[pi];
+const PH=['FIREBASE_SIGNALING','WEBRTC_DIRECT','SECURE_CHANNEL','CAM_BRIDGE'];
+let pi=0,ci=0,del=false;
+function tw() {
+  const el=document.getElementById('tw'); if(!el)return;
+  const c=PH[pi];
   if(!del){el.textContent=c.slice(0,++ci);if(ci===c.length){del=true;setTimeout(tw,2000);return;}}
   else{el.textContent=c.slice(0,--ci);if(ci===0){del=false;pi=(pi+1)%PH.length;}}
   setTimeout(tw,del?40:80);
 }
 
 // ── boot ──────────────────────────────────────────────────────────────────────
-var PEER_OK = typeof Peer !== 'undefined';
 [
-  {m:'SARA v5.0',t:'ok'},
-  {m:'PeerJS: '+(PEER_OK?'LOADED':'FAILED — check CDN'),t:PEER_OK?'ok':'err'},
-  {m:'buttons wired OK',t:'ok'},
-  {m:PEER_OK?'ready — enter key and tap camera':'RELOAD PAGE if PeerJS failed',t:PEER_OK?'ok':'err'}
-].forEach(function(l,i){setTimeout(function(){L(l.m,l.t);},i*200);});
+  {m:'SARA v6.0 — Firebase WebRTC', t:'ok'},
+  {m:'no PeerJS — raw WebRTC + Firebase', t:'ok'},
+  {m:'paste firebaseConfig in main.js first!', t:'err'},
+  {m:'then deploy and reload', t:''},
+].forEach((l,i) => setTimeout(()=>L(l.m,l.t), i*200));
 tw();
