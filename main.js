@@ -34,103 +34,137 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 // ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+//  SARA v7.0  —  Firebase WebRTC  —  main.js
+// =============================================================================
+//
+//  SETUP (one time, 5 minutes):
+//  1. Go to https://console.firebase.google.com
+//  2. Create a new project (free)
+//  3. Left sidebar → Build → Realtime Database → Create database → Test mode
+//  4. Left sidebar → Project Settings (gear icon) → Add Web App → Register app
+//  5. Copy the firebaseConfig object shown and paste it below
+//  6. Deploy all 3 files to GitHub Pages
+//
+// =============================================================================
 
-const ICE_SERVERS = {
+// =============================================================================
+
+const ICE_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: ['turn:openrelay.metered.ca:80',
-             'turn:openrelay.metered.ca:443',
-             'turn:openrelay.metered.ca:443?transport=tcp'],
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
       username: 'openrelayproject',
-      credential: 'openrelayproject' }
+      credential: 'openrelayproject'
+    }
   ]
 };
 
-// ── state ─────────────────────────────────────────────────────────────────────
+// ── App state ─────────────────────────────────────────────────────────────────
 let app, db;
-let pc       = null;   // RTCPeerConnection
-let localStream = null;
+let pc           = null;
+let localStream  = null;
 let remoteStream = null;
-let upT      = null;
-let t0       = null;
-let unsubOffer = null;
-let unsubAnswer = null;
-let unsubICE = null;
+let uptimeTimer  = null;
+let startTime    = null;
+let unsubOffer   = null;
+let unsubAnswer  = null;
+let unsubICE     = null;
 
-// ── init firebase ─────────────────────────────────────────────────────────────
+// ── Firebase init ─────────────────────────────────────────────────────────────
 function initFirebase() {
   if (firebaseConfig.apiKey === 'PASTE_YOUR_API_KEY') {
     L('Firebase not configured!', 'err');
     L('Open main.js and paste your firebaseConfig', 'err');
     return false;
   }
+  if (app) return true; // already initialised
   try {
     app = initializeApp(firebaseConfig);
     db  = getDatabase(app);
     L('Firebase connected', 'ok');
     return true;
-  } catch(e) {
-    L('Firebase init failed: ' + e.message, 'err');
+  } catch (e) {
+    L('Firebase error: ' + e.message, 'err');
     return false;
   }
 }
 
-// ── log ───────────────────────────────────────────────────────────────────────
-function L(msg, t) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const pad = n => String(n).padStart(2, '0');
+
+function L(msg, type) {
   const el = document.getElementById('LOG');
   const d  = document.createElement('div');
   d.className = 'll';
-  d.innerHTML = '<span class="lp">$</span><span class="l'+(t||'def')+'"> '+msg+'</span>';
+  d.innerHTML =
+    '<span class="lp">$</span>' +
+    '<span class="l' + (type || 'def') + '"> ' + msg + '</span>';
   el.appendChild(d);
   while (el.children.length > 60) el.removeChild(el.firstChild);
   el.scrollTop = el.scrollHeight;
 }
 
-// ── clock / uptime ────────────────────────────────────────────────────────────
-const pad = n => String(n).padStart(2,'0');
+function setLive(on, label) {
+  const dot = document.getElementById('DOT');
+  const ll  = document.getElementById('LL');
+  const ss  = document.getElementById('ss');
+  const sg  = document.getElementById('sg');
+  dot.className    = 'dot' + (on ? ' live' : '');
+  ll.textContent   = on ? (label || 'LIVE') : 'OFFLINE';
+  ss.textContent   = on ? (label || 'LIVE') : 'OFFLINE';
+  ss.style.color   = on ? 'var(--green)' : 'var(--red)';
+  sg.textContent   = on ? 'STRONG' : '--';
+  on ? startUptime() : stopUptime();
+}
+
+function startUptime() {
+  stopUptime();
+  startTime = Date.now();
+  uptimeTimer = setInterval(() => {
+    const e = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('su').textContent =
+      pad(Math.floor(e / 3600)) + ':' +
+      pad(Math.floor((e % 3600) / 60)) + ':' +
+      pad(e % 60);
+  }, 1000);
+}
+
+function stopUptime() {
+  clearInterval(uptimeTimer);
+  document.getElementById('su').textContent = '00:00:00';
+  startTime = null;
+}
+
+// Live clock
 setInterval(() => {
   const n = new Date();
   document.getElementById('CLK').textContent =
-    pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+    pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
 }, 1000);
 
-function startUp() {
-  stopUp(); t0 = Date.now();
-  upT = setInterval(() => {
-    const e = Math.floor((Date.now()-t0)/1000);
-    document.getElementById('su').textContent =
-      pad(Math.floor(e/3600))+':'+pad(Math.floor(e%3600/60))+':'+pad(e%60);
-  }, 1000);
-}
-function stopUp() { clearInterval(upT); document.getElementById('su').textContent='00:00:00'; t0=null; }
-
-// ── status ────────────────────────────────────────────────────────────────────
-function setLive(on, lbl) {
-  document.getElementById('DOT').className = 'dot'+(on?' live':'');
-  document.getElementById('LL').textContent = on ? (lbl||'LIVE') : 'OFFLINE';
-  const ss = document.getElementById('ss');
-  ss.textContent  = on ? (lbl||'LIVE') : 'OFFLINE';
-  ss.style.color  = on ? 'var(--g)' : 'var(--r)';
-  document.getElementById('sg').textContent = on ? 'STRONG' : '--';
-  on ? startUp() : stopUp();
-}
-
-// ── mode ──────────────────────────────────────────────────────────────────────
+// ── Mode switching ────────────────────────────────────────────────────────────
 function setMode(m) {
-  const isB = m === 'b';
-  document.getElementById('t-bcast').className = 'tab'+(isB?' on':'');
-  document.getElementById('t-watch').className = 'tab'+(!isB?' on':'');
-  document.getElementById('p-bcast').style.display = isB ? 'flex' : 'none';
-  document.getElementById('p-watch').style.display = isB ? 'none' : 'flex';
-  document.getElementById('sm').textContent = isB ? 'BROADCAST' : 'WATCH';
-  L('mode: '+(isB?'BROADCAST':'WATCH'));
+  const isBcast = m === 'b';
+  document.getElementById('t-bcast').className = 'tab' + (isBcast  ? ' on' : '');
+  document.getElementById('t-watch').className = 'tab' + (!isBcast ? ' on' : '');
+  document.getElementById('p-bcast').style.display = isBcast  ? 'flex' : 'none';
+  document.getElementById('p-watch').style.display = !isBcast ? 'flex' : 'none';
+  document.getElementById('sm').textContent = isBcast ? 'BROADCAST' : 'WATCH';
+  L('mode: ' + (isBcast ? 'BROADCAST' : 'WATCH'));
 }
 
-// ── attach remote stream to video ─────────────────────────────────────────────
+// ── Attach remote stream to video ─────────────────────────────────────────────
 function showStream(stream) {
   remoteStream = stream;
-  L('tracks: '+stream.getTracks().map(t=>t.kind+'('+t.readyState+')').join(', '),'ok');
+  L('tracks: ' + stream.getTracks()
+    .map(t => t.kind + '(' + t.readyState + ')').join(', '), 'ok');
 
   const V  = document.getElementById('V');
   const NS = document.getElementById('NS');
@@ -138,258 +172,279 @@ function showStream(stream) {
 
   NS.style.display = 'none';
   V.srcObject = stream;
-  V.muted = true;
+  V.muted     = true;
 
-  const p = V.play();
-  if (p && p.then) {
-    p.then(() => {
+  V.play()
+    .then(() => {
       L('▶ LIVE!', 'ok');
       PO.style.display = 'none';
       setLive(true, 'WATCHING');
-    }).catch(err => {
-      L('autoplay blocked — click CLICK TO PLAY', 'err');
+    })
+    .catch(() => {
+      L('tap CLICK TO PLAY button', 'err');
       PO.style.display = 'flex';
       setLive(true, 'PAUSED');
     });
-  } else {
-    PO.style.display = 'none';
-    setLive(true, 'WATCHING');
-  }
 }
 
-// ── manual play ───────────────────────────────────────────────────────────────
-document.getElementById('b-play').onclick = () => {
-  if (!remoteStream) { L('no stream yet','err'); return; }
+// ── Manual play button ────────────────────────────────────────────────────────
+document.getElementById('b-play').addEventListener('click', () => {
+  if (!remoteStream) { L('no stream yet', 'err'); return; }
+
   const V  = document.getElementById('V');
   const PO = document.getElementById('PO');
   const NS = document.getElementById('NS');
-  // Replace video element to force render
+
+  // Replace video element completely — most reliable fix for autoplay issues
   const nv = document.createElement('video');
-  nv.id='V'; nv.autoplay=true; nv.muted=true; nv.playsInline=true;
-  nv.setAttribute('playsinline','');
-  nv.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
+  nv.id          = 'V';
+  nv.autoplay    = true;
+  nv.muted       = true;
+  nv.playsInline = true;
+  nv.setAttribute('playsinline', '');
+  nv.style.cssText =
+    'position:absolute;top:0;left:0;width:100%;height:100%;' +
+    'object-fit:cover;z-index:1;display:block;';
   nv.srcObject = remoteStream;
   V.parentNode.replaceChild(nv, V);
-  nv.play().then(() => {
-    PO.style.display='none'; NS.style.display='none';
-    setLive(true,'WATCHING'); L('manual play OK','ok');
-  }).catch(e => L('play err: '+e.message,'err'));
-};
 
-// ── cleanup signaling listeners ────────────────────────────────────────────────
+  nv.play()
+    .then(() => {
+      PO.style.display = 'none';
+      NS.style.display = 'none';
+      setLive(true, 'WATCHING');
+      L('manual play OK', 'ok');
+    })
+    .catch(e => L('play error: ' + e.message, 'err'));
+});
+
+// ── Stop / cleanup ────────────────────────────────────────────────────────────
 function cleanListeners() {
-  if (unsubOffer)  { unsubOffer();  unsubOffer=null; }
-  if (unsubAnswer) { unsubAnswer(); unsubAnswer=null; }
-  if (unsubICE)    { unsubICE();    unsubICE=null; }
+  if (unsubOffer)  { unsubOffer();  unsubOffer  = null; }
+  if (unsubAnswer) { unsubAnswer(); unsubAnswer = null; }
+  if (unsubICE)    { unsubICE();    unsubICE    = null; }
 }
 
-// ── close peer connection ──────────────────────────────────────────────────────
 function closePc() {
-  if (pc) { try { pc.close(); } catch(e){} pc=null; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
 }
 
-// ── stop everything ───────────────────────────────────────────────────────────
 function stop() {
   cleanListeners();
   closePc();
-  if (localStream)  { localStream.getTracks().forEach(t=>t.stop());  localStream=null; }
-  if (remoteStream) { remoteStream.getTracks().forEach(t=>t.stop()); remoteStream=null; }
-  const V = document.getElementById('V');
-  if (V) V.srcObject = null;
-  document.getElementById('NS').style.display = 'flex';
-  document.getElementById('PO').style.display = 'none';
+  if (localStream)  { localStream.getTracks().forEach(t => t.stop());  localStream  = null; }
+  if (remoteStream) { remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; }
+
+  const V  = document.getElementById('V');
+  const NS = document.getElementById('NS');
+  const PO = document.getElementById('PO');
+  if (V)  V.srcObject    = null;
+  if (NS) NS.style.display = 'flex';
+  if (PO) PO.style.display = 'none';
+
   setLive(false);
-  L('stopped.','err');
+  L('stopped.', 'err');
+
   // Clean Firebase room
   const k = document.getElementById('KEY').value.trim();
-  if (db && k) remove(ref(db, 'rooms/'+k)).catch(()=>{});
+  if (db && k) remove(ref(db, 'rooms/' + k)).catch(() => {});
 }
 
-// ── create RTCPeerConnection ───────────────────────────────────────────────────
-function makePc(roomKey, isCaller) {
-  const p = new RTCPeerConnection(ICE_SERVERS);
+// ── Create RTCPeerConnection ───────────────────────────────────────────────────
+function makePeerConnection(roomKey, isCaller) {
+  const connection = new RTCPeerConnection(ICE_CONFIG);
 
-  // Send our ICE candidates to Firebase
-  p.onicecandidate = e => {
-    if (!e.candidate) return;
+  // Send our ICE candidates to Firebase so the other peer can use them
+  connection.onicecandidate = event => {
+    if (!event.candidate) return;
     const path = isCaller
-      ? 'rooms/'+roomKey+'/watcherICE'
-      : 'rooms/'+roomKey+'/broadcasterICE';
-    push(ref(db, path), e.candidate.toJSON()).catch(()=>{});
+      ? 'rooms/' + roomKey + '/watcherICE'
+      : 'rooms/' + roomKey + '/broadcasterICE';
+    push(ref(db, path), event.candidate.toJSON()).catch(() => {});
   };
 
-  p.oniceconnectionstatechange = () => {
-    L('ICE: '+p.iceConnectionState);
-    if (p.iceConnectionState === 'connected' || p.iceConnectionState === 'completed') {
+  connection.oniceconnectionstatechange = () => {
+    L('ICE: ' + connection.iceConnectionState);
+    if (connection.iceConnectionState === 'connected' ||
+        connection.iceConnectionState === 'completed') {
       L('ICE connected!', 'ok');
     }
-    if (p.iceConnectionState === 'failed') {
-      L('ICE failed — check both devices on same network','err');
+    if (connection.iceConnectionState === 'failed') {
+      L('ICE failed — check network', 'err');
     }
-  };
-
-  p.onconnectionstatechange = () => {
-    L('PC state: '+p.connectionState);
   };
 
   // Receive remote stream (watcher side)
-  p.ontrack = e => {
-    L('ontrack fired! streams: '+e.streams.length,'ok');
-    if (e.streams && e.streams[0]) {
-      showStream(e.streams[0]);
+  connection.ontrack = event => {
+    L('track received! streams: ' + event.streams.length, 'ok');
+    if (event.streams && event.streams[0]) {
+      showStream(event.streams[0]);
     }
   };
 
-  return p;
+  return connection;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BROADCAST (phone side)
-// ─────────────────────────────────────────────────────────────────────────────
-async function broadcast(facing) {
+// =============================================================================
+//  BROADCAST  (use on phone)
+// =============================================================================
+async function broadcast(facingMode) {
   const k = document.getElementById('KEY').value.trim();
-  if (!k) { L('enter room key first!','err'); return; }
+  if (!k) { L('enter a room key first!', 'err'); return; }
   if (!initFirebase()) return;
   stop();
 
-  L('requesting camera...');
+  L('requesting camera (' + facingMode + ')...');
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing }, audio: true
+      video: { facingMode },
+      audio: true
     });
-  } catch(e) {
-    L('camera denied: '+e.message,'err');
-    L('Settings > Browser > Camera > Allow','');
+  } catch (e) {
+    L('camera denied: ' + e.message, 'err');
+    L('Settings > Browser > Camera > Allow', '');
     return;
   }
 
-  // Show own camera locally
-  const V = document.getElementById('V');
-  document.getElementById('NS').style.display = 'none';
-  V.srcObject = localStream; V.muted = true; V.play().catch(()=>{});
+  // Show local camera preview
+  const V  = document.getElementById('V');
+  const NS = document.getElementById('NS');
+  NS.style.display = 'none';
+  V.srcObject = localStream;
+  V.muted = true;
+  V.play().catch(() => {});
 
-  const tr = localStream.getVideoTracks()[0];
-  if (tr) {
-    const s = tr.getSettings();
-    if (s.width) document.getElementById('RES').textContent = s.width+'x'+s.height;
+  const track = localStream.getVideoTracks()[0];
+  if (track) {
+    const s = track.getSettings();
+    if (s.width) document.getElementById('RES').textContent = s.width + 'x' + s.height;
   }
 
   setLive(true, 'BROADCASTING');
-  L('camera OK. cleaning old room...','ok');
+  L('camera OK. cleaning old room...', 'ok');
 
-  // Clean any old signaling data
-  await remove(ref(db, 'rooms/'+k)).catch(()=>{});
+  // Remove stale signaling data from previous sessions
+  await remove(ref(db, 'rooms/' + k)).catch(() => {});
 
-  L('waiting for watcher to join...','ok');
+  L('waiting for viewer to connect...', 'ok');
 
-  // Watch for an answer from the watcher
-  unsubAnswer = onValue(ref(db, 'rooms/'+k+'/answer'), async snap => {
+  // Listen for an answer from the watcher
+  unsubAnswer = onValue(ref(db, 'rooms/' + k + '/answer'), async snap => {
     const data = snap.val();
     if (!data || !pc) return;
     if (pc.signalingState === 'have-local-offer') {
-      L('answer received — setting remote description','ok');
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(data));
-        L('remote desc set OK','ok');
-      } catch(e) { L('setRemoteDesc err: '+e.message,'err'); }
+        L('remote description set', 'ok');
+      } catch (e) {
+        L('setRemoteDescription error: ' + e.message, 'err');
+      }
     }
   });
 
-  // Watch for ICE candidates from watcher
-  unsubICE = onChildAdded(ref(db, 'rooms/'+k+'/watcherICE'), async snap => {
+  // Listen for ICE candidates from the watcher
+  unsubICE = onChildAdded(ref(db, 'rooms/' + k + '/watcherICE'), async snap => {
     const c = snap.val();
     if (!c || !pc) return;
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(c));
-    } catch(e) { L('addICE err: '+e.message,'err'); }
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
   });
 
-  // Watch for watcher joining (they write their presence)
-  unsubOffer = onValue(ref(db, 'rooms/'+k+'/watcherReady'), async snap => {
+  // When watcher signals they are ready, create an offer
+  unsubOffer = onValue(ref(db, 'rooms/' + k + '/watcherReady'), async snap => {
     if (!snap.val()) return;
-    L('watcher joined! creating offer...','ok');
+    L('viewer joined! creating offer...', 'ok');
     setLive(true, 'LIVE');
 
     closePc();
-    pc = makePc(k, false); // broadcaster = not caller
+    pc = makePeerConnection(k, false); // broadcaster is not the caller
 
-    // Add local tracks
+    // Add all local tracks to the connection
     localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-    // Create offer
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await set(ref(db, 'rooms/'+k+'/offer'), { type: offer.type, sdp: offer.sdp });
-      L('offer sent','ok');
-    } catch(e) { L('offer err: '+e.message,'err'); }
+      await set(ref(db, 'rooms/' + k + '/offer'), {
+        type: offer.type,
+        sdp:  offer.sdp
+      });
+      L('offer sent to viewer', 'ok');
+    } catch (e) {
+      L('offer error: ' + e.message, 'err');
+    }
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WATCH (PC side)
-// ─────────────────────────────────────────────────────────────────────────────
+// =============================================================================
+//  WATCH  (use on PC)
+// =============================================================================
 async function watch() {
   const k = document.getElementById('KEY').value.trim();
-  if (!k) { L('enter room key first!','err'); return; }
+  if (!k) { L('enter a room key first!', 'err'); return; }
   if (!initFirebase()) return;
   stop();
 
-  L('connecting to room "'+k+'"...');
+  L('joining room "' + k + '"...');
 
-  // Get a local audio stream for proper WebRTC negotiation
+  // Get local audio for proper WebRTC offer/answer (no video popup on PC)
   let localAudio;
   try {
-    localAudio = await navigator.mediaDevices.getUserMedia({audio:true, video:false});
-  } catch(e) {
-    localAudio = new MediaStream();
-    L('no mic — using empty stream','');
+    localAudio = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    localAudio = new MediaStream(); // silent fallback
+    L('no mic — using silent stream', '');
   }
 
-  pc = makePc(k, true); // watcher = caller
+  pc = makePeerConnection(k, true); // watcher is the caller
 
-  // Add local audio (needed for proper offer/answer)
+  // Add local audio tracks
   localAudio.getTracks().forEach(t => pc.addTrack(t, localAudio));
 
-  // Tell broadcaster we're ready
-  await set(ref(db, 'rooms/'+k+'/watcherReady'), true);
-  L('joined room. waiting for offer...','ok');
+  // Signal broadcaster that we are ready
+  await set(ref(db, 'rooms/' + k + '/watcherReady'), true);
+  L('waiting for broadcaster offer...', 'ok');
 
   // Listen for offer from broadcaster
-  unsubOffer = onValue(ref(db, 'rooms/'+k+'/offer'), async snap => {
+  unsubOffer = onValue(ref(db, 'rooms/' + k + '/offer'), async snap => {
     const data = snap.val();
     if (!data || !pc) return;
     if (pc.signalingState !== 'stable') return;
 
-    L('offer received — creating answer...','ok');
+    L('offer received — creating answer...', 'ok');
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await set(ref(db, 'rooms/'+k+'/answer'), { type: answer.type, sdp: answer.sdp });
-      L('answer sent','ok');
-    } catch(e) { L('answer err: '+e.message,'err'); }
+      await set(ref(db, 'rooms/' + k + '/answer'), {
+        type: answer.type,
+        sdp:  answer.sdp
+      });
+      L('answer sent to broadcaster', 'ok');
+    } catch (e) {
+      L('answer error: ' + e.message, 'err');
+    }
   });
 
   // Listen for ICE candidates from broadcaster
-  unsubICE = onChildAdded(ref(db, 'rooms/'+k+'/broadcasterICE'), async snap => {
+  unsubICE = onChildAdded(ref(db, 'rooms/' + k + '/broadcasterICE'), async snap => {
     const c = snap.val();
     if (!c || !pc) return;
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(c));
-    } catch(e) { L('addICE err: '+e.message,'err'); }
+    try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
   });
 }
 
-// ── fullscreen ────────────────────────────────────────────────────────────────
-document.getElementById('b-fs').onclick = () => {
+// ── Fullscreen ────────────────────────────────────────────────────────────────
+document.getElementById('b-fs').addEventListener('click', () => {
   const el = document.getElementById('VBOX');
-  if (!document.fullscreenElement) (el.requestFullscreen||el.webkitRequestFullscreen).call(el);
-  else (document.exitFullscreen||document.webkitExitFullscreen).call(document);
-};
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+});
 
-// ── wire buttons ──────────────────────────────────────────────────────────────
-const BTNS = {
+// ── Wire all buttons ──────────────────────────────────────────────────────────
+const BUTTON_MAP = {
   't-bcast': () => setMode('b'),
   't-watch':  () => setMode('w'),
   'b-back':   () => broadcast('environment'),
@@ -398,29 +453,38 @@ const BTNS = {
   'b-conn':   () => watch(),
   'b-stopw':  () => stop()
 };
-Object.entries(BTNS).forEach(([id,fn]) => {
+
+Object.entries(BUTTON_MAP).forEach(([id, fn]) => {
   const el = document.getElementById(id);
-  if (!el) { L('WARN: #'+id+' not found','err'); return; }
+  if (!el) { L('WARN: #' + id + ' not found', 'err'); return; }
   el.addEventListener('click',    e => { e.stopPropagation(); fn(); });
   el.addEventListener('touchend', e => { e.preventDefault(); e.stopPropagation(); fn(); });
 });
 
-// ── typewriter ────────────────────────────────────────────────────────────────
-const PH=['FIREBASE_SIGNALING','WEBRTC_DIRECT','SECURE_CHANNEL','CAM_BRIDGE'];
-let pi=0,ci=0,del=false;
-function tw() {
-  const el=document.getElementById('tw'); if(!el)return;
-  const c=PH[pi];
-  if(!del){el.textContent=c.slice(0,++ci);if(ci===c.length){del=true;setTimeout(tw,2000);return;}}
-  else{el.textContent=c.slice(0,--ci);if(ci===0){del=false;pi=(pi+1)%PH.length;}}
-  setTimeout(tw,del?40:80);
+// ── Typewriter animation ──────────────────────────────────────────────────────
+const PHRASES = ['FIREBASE_SIGNALING', 'WEBRTC_DIRECT', 'SECURE_CHANNEL', 'CAM_BRIDGE_V2'];
+let pIdx = 0, cIdx = 0, deleting = false;
+
+function typewriter() {
+  const el = document.getElementById('tw');
+  if (!el) return;
+  const current = PHRASES[pIdx];
+  if (!deleting) {
+    el.textContent = current.slice(0, ++cIdx);
+    if (cIdx === current.length) { deleting = true; setTimeout(typewriter, 2000); return; }
+  } else {
+    el.textContent = current.slice(0, --cIdx);
+    if (cIdx === 0) { deleting = false; pIdx = (pIdx + 1) % PHRASES.length; }
+  }
+  setTimeout(typewriter, deleting ? 40 : 80);
 }
 
-// ── boot ──────────────────────────────────────────────────────────────────────
-[
-  {m:'SARA v6.0 — Firebase WebRTC', t:'ok'},
-  {m:'no PeerJS — raw WebRTC + Firebase', t:'ok'},
-  {m:'paste firebaseConfig in main.js first!', t:'err'},
-  {m:'then deploy and reload', t:''},
-].forEach((l,i) => setTimeout(()=>L(l.m,l.t), i*200));
-tw();
+// ── Boot log ──────────────────────────────────────────────────────────────────
+const BOOT = [
+  { m: 'SARA v7.0 — Firebase WebRTC',    t: 'ok'  },
+  { m: 'no PeerJS — raw WebRTC',         t: 'ok'  },
+  { m: 'paste firebaseConfig in main.js',t: 'err' },
+  { m: 'then deploy and open the site',  t: ''    },
+];
+BOOT.forEach((line, i) => setTimeout(() => L(line.m, line.t), i * 200));
+typewriter();
