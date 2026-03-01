@@ -62,10 +62,22 @@
 //
 // =============================================================================
 
-// (function () {
-//   'use strict';
-
-  // ── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────────
+// =============================================================================
+//  SARA v11.0 — Firebase Realtime DB Signaling + WebRTC
+//  Plain JS, Firebase Compat SDK (loaded via HTML script tags)
+// =============================================================================
+//
+//  FIREBASE SETUP (one-time, 5 minutes):
+//  1. https://console.firebase.google.com → Add project
+//  2. Left menu: Build → Realtime Database → Create database
+//     → pick any region → Start in TEST MODE → Enable
+//  3. Left menu: Project Settings (gear) → scroll to "Your apps"
+//     → click </> → give app a name → Register app
+//  4. Copy the firebaseConfig shown and paste it below
+//  5. Push all 3 files to GitHub Pages — done!
+//
+// =============================================================================
+//────────────────────────────────────────────────────────────────────
 
   var ICE = {
     iceServers: [
@@ -319,29 +331,21 @@
     // ── FORCED 720p SETTINGS ─────────────────────────────────────────────
     // exact = browser MUST deliver this or reject. min = floor it won't go below.
     // TARGET_BITRATE controls how many kbps WebRTC allocates for video.
-  const TARGET_BITRATE_KBPS = 2700;
+    const TARGET_BITRATE_KBPS = 3100;   // 2500 kbps = solid 720p30. Lower = more stable on weak links.
 
-const constraints = {
-  video: {
-    facingMode: facing,
-    // Using 'ideal' instead of 'min' allows the browser to 
-    // stay at 720p but fall back if the hardware literally can't do it.
-    width:  { ideal: 1280 }, 
-    height: { ideal: 720 },
-    
-    // We REMOVE 'min: 25'. 
-    // This allows the FPS to drop to 15, 10, or 5 if the link is weak.
-    frameRate: { ideal: 30, max: 30 }
-  },
-  audio: {
-    echoCancellation: true,
-    noiseSuppression: true,
-    sampleRate: 44100
-  }
-};
-
-// Request the stream
-const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: facing,
+        width:      { min: 1280, ideal: 1280, max: 1280 },
+        height:     { min: 720,  ideal: 720,  max: 720  },
+        frameRate:  { min: 25,   ideal: 30,   max: 30   }
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100
+      }
+    })
     .then(function (stream) {
       localStream = stream;
 
