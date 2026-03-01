@@ -1,145 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SARA // RVU</title>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SARA // RVU</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="scanlines"></div>
-<div class="corner corner-tl"></div>
-<div class="corner corner-tr"></div>
-<div class="corner corner-bl"></div>
-<div class="corner corner-br"></div>
-
-<div class="wrapper">
-
-    <!-- TOP BAR -->
-    <header class="hud-bar">
-        <div class="hud-left">
-            <span class="dim-text">SYS://RVU ▶</span>
-            <span class="green-text" id="typewriter"></span>
+<div class="wrap">
+  <header class="hdr">
+    <div class="hdr-side">SYS://RVU ▶ <span id="tw"></span></div>
+    <div class="hdr-mid">
+      <div class="logo">S.A.R.A</div>
+      <div class="logo-sub">Secure Adaptive Remote Access</div>
+    </div>
+    <div class="hdr-side">SARANSH_K // 1RVU22BSC090</div>
+  </header>
+  <div class="grid">
+    <div class="panel">
+      <div class="ptitle">[ STREAM CONTROL ]</div>
+      <div class="tabs">
+        <button class="tab on" id="t-bcast">&#9658; BROADCAST</button>
+        <button class="tab"    id="t-watch">&#9673; RECEIVE</button>
+      </div>
+      <div class="ifield">
+        <div class="ilabel">// AUTH KEY</div>
+        <div class="iwrap">
+          <span class="ipre">$_</span>
+          <input id="KEY" type="password" class="inp" placeholder="enter_key">
         </div>
-        <div class="hud-center">
-            <div class="logo">S.A.R.A</div>
-            <div class="logo-sub">Secure Adaptive Remote Access</div>
+      </div>
+      <div id="p-bcast" class="bstack">
+        <button class="btn bg" id="b-back">BACK CAMERA</button>
+        <button class="btn bd" id="b-front">FRONT CAMERA</button>
+        <button class="btn br" id="b-stopb">TERMINATE</button>
+      </div>
+      <div id="p-watch" class="bstack" style="display:none">
+        <button class="btn bg" id="b-conn">CONNECT FEED</button>
+        <button class="btn br" id="b-stopw">DISCONNECT</button>
+      </div>
+      <div class="divider"></div>
+      <div class="ptitle">[ SYS LOG ]</div>
+      <div class="log" id="LOG"></div>
+      <div class="divider"></div>
+      <div class="stats">
+        <div class="stat"><div class="sl">STATUS</div><div class="sv" id="ss">OFFLINE</div></div>
+        <div class="stat"><div class="sl">MODE</div><div class="sv" id="sm">BROADCAST</div></div>
+        <div class="stat"><div class="sl">UPTIME</div><div class="sv" id="su">00:00:00</div></div>
+        <div class="stat"><div class="sl">SIGNAL</div><div class="sv" id="sg">--</div></div>
+      </div>
+    </div>
+    <div class="vsec">
+      <div class="vbox" id="VBOX">
+        <div class="vc vtl"></div><div class="vc vtr"></div>
+        <div class="vc vbl"></div><div class="vc vbr"></div>
+        <video id="V" autoplay muted playsinline></video>
+        <div id="NS" class="overlay">
+          <div class="glitch">NO_SIGNAL</div>
+          <div class="sub-txt">AWAITING STREAM</div>
         </div>
-        <div class="hud-right">
-            <span class="dim-text">SARANSH_K // 1RVU22BSC090</span>
+        <div id="PO" class="overlay" style="display:none;background:rgba(0,0,0,0.92)">
+          <button id="b-play" class="pbtn">CLICK TO PLAY</button>
+          <div class="sub-txt">tap once to start stream</div>
         </div>
-    </header>
-
-    <!-- MAIN -->
-    <main class="main-grid">
-
-        <!-- LEFT PANEL -->
-        <aside class="panel">
-            <div class="panel-title">[ STREAM CONTROL ]</div>
-
-            <div class="tab-row">
-                <button class="tab active" id="tab-broadcast">▶ BROADCAST</button>
-                <button class="tab"        id="tab-watch">◉ RECEIVE</button>
-            </div>
-
-            <div class="field">
-                <div class="field-label">// AUTH KEY</div>
-                <div class="input-wrap">
-                    <span class="input-pre">$_</span>
-                    <input id="stream-pass" type="password" class="input-field" placeholder="enter_key">
-                </div>
-            </div>
-
-            <!-- Broadcast panel -->
-            <div id="panel-broadcast" class="btn-stack">
-                <button class="btn btn-green" id="btn-back">◈ BACK CAMERA</button>
-                <button class="btn btn-dim"   id="btn-front">◈ FRONT CAMERA</button>
-                <button class="btn btn-red"   id="btn-stop-b">■ TERMINATE</button>
-            </div>
-
-            <!-- Watch panel -->
-            <div id="panel-watch" class="btn-stack hidden">
-                <button class="btn btn-green" id="btn-connect">◈ CONNECT FEED</button>
-                <button class="btn btn-red"   id="btn-stop-w">■ DISCONNECT</button>
-            </div>
-
-            <div class="divider"></div>
-            <div class="panel-title">[ SYS LOG ]</div>
-            <div class="log" id="log"></div>
-
-            <div class="divider"></div>
-            <div class="stats">
-                <div class="stat"><div class="stat-l">STATUS</div><div class="stat-v" id="s-status">OFFLINE</div></div>
-                <div class="stat"><div class="stat-l">MODE</div><div class="stat-v" id="s-mode">BROADCAST</div></div>
-                <div class="stat"><div class="stat-l">UPTIME</div><div class="stat-v" id="s-uptime">00:00:00</div></div>
-                <div class="stat"><div class="stat-l">SIGNAL</div><div class="stat-v" id="s-signal">--</div></div>
-            </div>
-        </aside>
-
-        <!-- VIDEO -->
-        <section class="video-section">
-            <div class="video-frame">
-                <div class="vf-corner vf-tl"></div>
-                <div class="vf-corner vf-tr"></div>
-                <div class="vf-corner vf-bl"></div>
-                <div class="vf-corner vf-br"></div>
-
-                <!-- Actual video element -->
-                <video id="webcam-feed" autoplay muted playsinline></video>
-
-                <!-- No signal screen -->
-                <div id="overlay-nosignal" class="abs-fill center-flex" style="background:#000;z-index:10;">
-                    <div class="glitch">NO_SIGNAL</div>
-                    <div class="dim-text" style="letter-spacing:3px;margin-top:8px;font-size:0.65rem;">AWAITING STREAM</div>
-                </div>
-
-                <!-- PLAY button (shown when autoplay blocked) -->
-                <div id="overlay-play" class="abs-fill center-flex hidden" style="background:rgba(0,0,0,0.85);z-index:20;">
-                    <button id="btn-manual-play" class="play-btn">▶ CLICK TO PLAY</button>
-                </div>
-
-                <!-- HUD top -->
-                <div class="vid-top">
-                    <div class="live-pill">
-                        <div class="dot" id="live-dot"></div>
-                        <span id="live-label">OFFLINE</span>
-                    </div>
-                    <div class="green-text mono" id="vid-clock">00:00:00</div>
-                    <button class="fs-btn" id="btn-fs">[ FS ]</button>
-                </div>
-
-                <!-- HUD bottom -->
-                <div class="vid-bot">
-                    <span class="hud-tag">CAM_FEED_01</span>
-                    <span class="hud-tag" id="hud-res">-- x --</span>
-                    <span class="hud-tag">RVU//CS</span>
-                </div>
-            </div>
-
-            <!-- DEBUG: test video element directly -->
-            <div id="debug-bar" style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-                <button id="btn-test-cam" style="font-family:monospace;padding:8px 14px;background:transparent;border:1px solid #00ff41;color:#00ff41;cursor:pointer;font-size:0.7rem;letter-spacing:1px;">TEST LOCAL CAM</button>
-                <button id="btn-force-render" style="font-family:monospace;padding:8px 14px;background:transparent;border:1px solid #ffb300;color:#ffb300;cursor:pointer;font-size:0.7rem;letter-spacing:1px;">FORCE RENDER STREAM</button>
-                <span id="debug-msg" style="font-family:monospace;font-size:0.65rem;color:#4a9955;display:flex;align-items:center;"></span>
-            </div>
-            <details class="how-to">
-                <summary>▶ HOW TO USE</summary>
-                <div class="how-body">
-                    <p><span class="green-text">01.</span> Open on <strong>phone</strong> and <strong>PC</strong> — same WiFi.</p>
-                    <p><span class="green-text">02.</span> Both enter the <strong>same AUTH KEY</strong>.</p>
-                    <p><span class="green-text">03.</span> Phone → BROADCAST → tap camera button.</p>
-                    <p><span class="green-text">04.</span> PC → RECEIVE → tap CONNECT FEED.</p>
-                    <p><span class="green-text">05.</span> If video doesn't start, click <strong>▶ CLICK TO PLAY</strong>.</p>
-                </div>
-            </details>
-        </section>
-    </main>
-
-    <footer class="footer">© 2024 SARANSH KUMAR // RV UNIVERSITY // COMPUTER SCIENCE</footer>
+        <div class="vhud-t">
+          <div class="vpill"><div class="dot" id="DOT"></div><span id="LL">OFFLINE</span></div>
+          <div id="CLK" class="clk">00:00:00</div>
+          <button class="fsbtn" id="b-fs">[ FS ]</button>
+        </div>
+        <div class="vhud-b">
+          <span class="htag">CAM_FEED_01</span>
+          <span class="htag" id="RES">-- x --</span>
+          <span class="htag">RVU//CS</span>
+        </div>
+      </div>
+      <details class="howto">
+        <summary>HOW TO USE</summary>
+        <div class="howbody">
+          <p><span class="gc">01.</span> Phone + PC on same hotspot.</p>
+          <p><span class="gc">02.</span> Same AUTH KEY on both devices.</p>
+          <p><span class="gc">03.</span> Phone: BROADCAST then tap camera.</p>
+          <p><span class="gc">04.</span> PC: RECEIVE then CONNECT FEED.</p>
+          <p><span class="gc">05.</span> Click CLICK TO PLAY if video is black.</p>
+        </div>
+      </details>
+    </div>
+  </div>
+  <footer class="footer">2024 SARANSH KUMAR // RV UNIVERSITY // COMPUTER SCIENCE</footer>
 </div>
-
-<script src="main.js?v=9"></script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script src="main.js"></script>
 </body>
 </html>
