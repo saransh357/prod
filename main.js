@@ -54,6 +54,7 @@
   var timerID     = null;
   var t0          = null;
   var fbRefs      = [];   // all active firebase listeners for cleanup
+  var QUALITY = 'ultra';
 
   // ── DOM shortcut ───────────────────────────────────────────────────────────
   function get(id) {
