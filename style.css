@@ -38,8 +38,9 @@ html, body {
 .hdr-c { text-align:center; }
 .logo {
   font-family:var(--disp); font-size:1.5rem; font-weight:900;
-  letter-spacing:8px; text-shadow:0 0 20px var(--g),0 0 45px var(--g3);
-  animation:flicker 9s infinite;
+  letter-spacing:8px;
+  /* text-shadow:0 0 20px var(--g),0 0 45px var(--g3); */
+  /* animation:flicker 9s infinite; */
 }
 .logo-sub { font-size:.47rem; color:var(--sub); letter-spacing:3px; margin-top:3px; }
 @keyframes flicker { 0%,92%,100%{opacity:1}93%{opacity:.15}95%{opacity:.85}97%{opacity:.1} }
