@@ -39,6 +39,7 @@ html, body {
 .logo {
   font-family:var(--disp); font-size:1.5rem; font-weight:900;
   letter-spacing:8px;
+   position: fixed;
   /* text-shadow:0 0 20px var(--g),0 0 45px var(--g3); */
   /* animation:flicker 9s infinite; */
 }
