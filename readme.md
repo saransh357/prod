@@ -1,6 +1,6 @@
 # CryptoAPI — Encryption as a Service
 
-A production-ready API provider that wraps your `pendulum_key_gen.py` (SARA)
+A production-ready API provider that wraps your `pendulum_key_gen.py` (CKA)
 encryption server with customer management, API key issuance, usage tracking,
 and a customer portal.
 
