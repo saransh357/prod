@@ -140,8 +140,14 @@ html, body {
 .br { bottom:8px; right:8px;  border-bottom:2px solid var(--g); border-right:2px solid var(--g); }
 
 #videoEl {
-  position:absolute; inset:0; width:100%; height:100%;
-  object-fit:contain; z-index:1; display:block; background:#000;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;        /* was: contain — cover fills the box in landscape */
+  z-index: 1;
+  display: block;
+  background: #000;
 }
 
 /* overlays */
@@ -217,14 +223,25 @@ html, body {
 }
 
 /* ── Hide all UI text/HUD when in fullscreen ─────────────────── */
-:fullscreen .hud-t,
-:fullscreen .hud-b,
-:fullscreen .corner,
-:-webkit-full-screen .hud-t,
-:-webkit-full-screen .hud-b,
-:-webkit-full-screen .corner,
-:-moz-full-screen .hud-t,
-:-moz-full-screen .hud-b,
-:-moz-full-screen .corner {
+/* ── Fullscreen: show ONLY the raw video, nothing else ── */
+:fullscreen #vbox > *:not(#videoEl),
+:-webkit-full-screen #vbox > *:not(#videoEl),
+:-moz-full-screen #vbox > *:not(#videoEl) {
   display: none !important;
+}
+
+:fullscreen #vbox,
+:-webkit-full-screen #vbox,
+:-moz-full-screen #vbox {
+  background: #000;
+}
+
+:fullscreen #videoEl,
+:-webkit-full-screen #videoEl,
+:-moz-full-screen #videoEl {
+  object-fit: cover;
+  width: 100vw;
+  height: 100vh;
+  position: fixed;
+  inset: 0;
 }
