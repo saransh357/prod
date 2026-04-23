@@ -348,8 +348,8 @@
     navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: facing,
-        width:      { min: 1280, ideal: 1280, max: 1280 },
-        height:     { min: 720,  ideal: 720,  max: 720  },
+        width:      { min: 1280, ideal: 1920, max: 1920 },
+        height:     { min: 720,  ideal: 1080,  max: 1080  },
         frameRate:  { min: 25,   ideal: 30,   max: 30   }
       },
       audio: {
