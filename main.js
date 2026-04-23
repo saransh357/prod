@@ -526,17 +526,16 @@
 
   // ── Fullscreen button ──────────────────────────────────────────────────────
   function wireFsBtn() {
-    var btn = get('btnFs');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      var box = get('vbox');
-      if (!document.fullscreenElement) {
-        (box.requestFullscreen || box.webkitRequestFullscreen).call(box);
-      } else {
-        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-      }
-    });
-  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'f' && e.key !== 'F') return;
+    var box = get('vbox');
+    if (!document.fullscreenElement) {
+      (box.requestFullscreen || box.webkitRequestFullscreen).call(box);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  });
+}
 
   // ── Wire all main buttons ──────────────────────────────────────────────────
   function wireButtons() {
