@@ -510,7 +510,7 @@
       var nv   = document.createElement('video');
       nv.id = 'videoEl'; nv.autoplay = true; nv.muted = true; nv.playsInline = true;
       nv.setAttribute('playsinline', '');
-      nv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
+      nv.style.cssText = 'position:absolute;inset:0;aspect-ratio:16/9;width:100%;height:100%;object-fit:cover;z-index:1;display:block;';
       nv.srcObject = remoteStream;
       old.parentNode.replaceChild(nv, old);
       nv.play()
