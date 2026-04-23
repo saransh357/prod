@@ -19,15 +19,15 @@
 
   // ── PASTE YOUR FIREBASE CONFIG HERE ────────────────────────────────────────
   var FB_CONFIG = {
-  apiKey: "AIzaSyC6BnHEcbb4QOdpEv4q12xBUaaZ2fPr1dg",
-  authDomain: "camprod-5bf0c.firebaseapp.com",
-  projectId: "camprod-5bf0c",
-  storageBucket: "camprod-5bf0c.firebasestorage.app",
-  messagingSenderId: "455003749103",
-  appId: "1:455003749103:web:be1fa8af3561774611791a",
-  measurementId: "G-22J16WGX6S"
+  apiKey: "AIzaSyAjtrCK1C8awuDmjetPXN_1ndFQDZjPhf8",
+  authDomain: "camera-a224e.firebaseapp.com",
+  databaseURL: "https://camera-a224e-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "camera-a224e",
+  storageBucket: "camera-a224e.firebasestorage.app",
+  messagingSenderId: "920811933394",
+  appId: "1:920811933394:web:fe4d7d87d23362a250e70b",
+  measurementId: "G-9GF0THENZP"
 };
-
 //   // Import the functions you need from the SDKs you need
 // import { initializeApp } from "firebase/app";
 // import { getAnalytics } from "firebase/analytics";
